@@ -17,6 +17,7 @@ button, .file-button, .buy-link { min-height: 44px; border: 2px solid var(--line
 button:hover, .file-button:hover, .buy-link:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--line); }
 button:active, .file-button:active, .buy-link:active { transform: translate(1px, 1px); box-shadow: none; }
 :focus-visible { outline: 3px solid var(--lichen); outline-offset: 3px; }
+.file-button:has(input:focus-visible) { outline: 3px solid var(--lichen); outline-offset: 3px; }
 .primary { background: var(--moss); color: #fff; border-color: var(--moss-deep); }
 a { color: var(--moss-deep); text-underline-offset: 3px; }
 h1, h2, h3, p { margin-top: 0; }

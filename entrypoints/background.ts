@@ -27,10 +27,11 @@ async function checkLink(rawUrl: string): Promise<CheckResult> {
   if (!['http:', 'https:'].includes(url.protocol)) return { state: 'failed', error: 'Only HTTP and HTTPS links can be checked.' };
 
   const now = Date.now();
+  const blocked = blockedUntil.get(url.hostname) ?? 0;
+  if (blocked > now) return { state: 'restricted', statusCode: 429, error: `This site asked checks to wait until ${new Date(blocked).toLocaleTimeString()}.` };
   const globalWait = Math.max(0, 750 - (now - lastRequestAt));
   const hostWait = Math.max(0, MIN_HOST_INTERVAL_MS - (now - (lastHostAt.get(url.hostname) ?? 0)));
-  const limitWait = Math.max(0, (blockedUntil.get(url.hostname) ?? 0) - now);
-  await delay(Math.max(globalWait, hostWait, limitWait));
+  await delay(Math.max(globalWait, hostWait));
   lastRequestAt = Date.now();
   lastHostAt.set(url.hostname, lastRequestAt);
 

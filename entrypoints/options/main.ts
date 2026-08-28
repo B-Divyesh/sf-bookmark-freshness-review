@@ -79,7 +79,7 @@ function bindEvents() {
 
 async function onAction(event: Event) {
   const action = (event.currentTarget as HTMLElement).dataset.action;
-  if (action === 'sample') { records = structuredClone(sampleBookmarks); await save(); render(); }
+  if (action === 'sample') { location.href = `${location.pathname}?demo=1`; }
   if (action === 'check') await checkVisible();
   if (action === 'export') downloadExport();
   if (action === 'reset-demo') { records = structuredClone(sampleBookmarks); await chrome.storage.local.remove(DEMO_KEY); render(); announce('Demo reset.'); }

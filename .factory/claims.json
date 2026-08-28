@@ -53,7 +53,7 @@
     "claim": "The checker spaces requests apart and honors Retry-After limits.",
     "where": "privacy page and implementation documentation",
     "test": "npx vitest run -t @claim:request-spacing",
-    "sandbox": "unit fixture; assert the minimum host interval and bounded Retry-After delay"
+    "sandbox": "unit fixture; assert the minimum host interval and full Retry-After delay"
   },
   {
     "id": "html-export",

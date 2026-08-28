@@ -19,7 +19,7 @@ export function linkRequestInit(): RequestInit {
 export function retryDelay(value: string | null, now = Date.now()): number {
   if (!value) return 5_000;
   const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.min(Math.max(seconds * 1000, MIN_HOST_INTERVAL_MS), 60_000);
+  if (Number.isFinite(seconds)) return Math.max(seconds * 1000, MIN_HOST_INTERVAL_MS);
   const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.min(Math.max(date - now, MIN_HOST_INTERVAL_MS), 60_000) : 5_000;
+  return Number.isFinite(date) ? Math.max(date - now, MIN_HOST_INTERVAL_MS) : 5_000;
 }

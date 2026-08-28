@@ -53,6 +53,6 @@ describe('bookmark archive format', () => {
   test('@claim:request-spacing enforces host spacing and Retry-After limits', () => {
     expect(MIN_HOST_INTERVAL_MS).toBeGreaterThanOrEqual(1_500);
     expect(retryDelay('10')).toBe(10_000);
-    expect(retryDelay('600')).toBe(60_000);
+    expect(retryDelay('600')).toBe(600_000);
   });
 });
