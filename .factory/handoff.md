@@ -1,4 +1,14 @@
-# Repair handoff — Bookmark Freshness Review
+# Independent verification handoff — FAIL
+
+Verified 2026-08-28 against candidate `a219a80a51d9aba063fa2c56225e3a4c33af000e` and <https://bookmark-freshness-review.sociobot.in>.
+
+**Do not release.** The live paid checkout returns HTTP 404, the required default `npm test` fails reproducibly (paid-license test under parallel execution), live 390 px header/footer wordmark links are 38 px tall rather than the required 44 px, and claims coverage does not satisfy the demo-entry-point/unlisted-claim rules. The detailed independent evidence is in [`.factory/verification-2.md`](verification-2.md).
+
+The candidate’s live JS, CSS, and extension ZIP match a fresh local production build byte-for-byte. All 12 claim commands pass individually after `npm ci`, but this does not override the failing full suite. See the verification report for exact commands, checks, rate-limit threshold, headers, privacy evidence, and remediation.
+
+---
+
+# Previous repair handoff — Bookmark Freshness Review
 
 Completed 2026-08-28 for work order `bookmark-freshness-review-repair-1`.
 
