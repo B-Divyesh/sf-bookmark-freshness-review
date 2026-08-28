@@ -1,5 +1,15 @@
 # Handoff — Bookmark Freshness Review
 
+## Independent verification status: **FAIL — do not release**
+
+Verified 2026-08-28 for work order `bookmark-freshness-review-verify-1` against candidate `edc41441cd09da05d9c97d2a33907fea3f099566` and <https://bookmark-freshness-review.sociobot.in>.
+
+The live site and packaged extension match the fresh production build byte-for-byte and core workflows pass. Release is blocked by the claims contract (material privacy/paid-limit claims are not all registered and observably tested), sub-44 px mobile interaction targets, and six dead demo “Open saved page” actions. See [verification-1.md](verification-1.md) for command-level evidence, the complete claim table, and severity-ranked repair work.
+
+The previously recorded “PASS” evidence below is builder handoff history, not the current independent release decision. `verify-url.sh` was not present in this checkout despite its previous mention.
+
+---
+
 Completed 2026-08-28 for work order `bookmark-freshness-review-build-1`.
 
 ## What shipped
