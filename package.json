@@ -10,10 +10,11 @@
     "build": "npm run build:site",
     "build:extension": "wxt build && wxt zip",
     "build:site": "npm run build:extension && node scripts/stage-extension.mjs && vite build --config site/vite.config.ts",
-    "test": "npm run build && vitest run && playwright test",
+    "test": "npm run lint && npm run build && vitest run && playwright test",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit && node scripts/verify-claims.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",

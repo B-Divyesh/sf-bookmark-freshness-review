@@ -53,6 +53,7 @@ main { position: relative; z-index: 1; }
 .progress-slab i { display: block; height: 100%; background: var(--moss); transition: width 220ms ease; }
 .license-slab { background: var(--slab); }
 .license-slab p { font-size: 14px; }
+.license-slab .purchase-paused { padding: 8px; border: 1px solid var(--lichen); font-weight: 700; }
 .license-slab a, .license-slab button { width: 100%; margin-top: 8px; font-size: 14px; }
 .ledger { padding: 32px clamp(16px, 4vw, 48px) 96px; min-width: 0; }
 .ledger-head { display: flex; align-items: end; justify-content: space-between; border-bottom: 4px solid var(--line); margin-bottom: 18px; }

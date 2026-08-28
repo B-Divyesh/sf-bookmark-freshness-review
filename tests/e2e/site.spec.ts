@@ -65,6 +65,13 @@ test('accepts a valid one-time license return', async ({ page }) => {
   expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toContain('test-license');
 });
 
+test('@claim:checkout-paused does not link to checkout while product registration is unavailable', async ({ page }) => {
+  await page.goto('/demo');
+  await page.getByRole('link', { name: 'Bookmark Freshness Review home' }).click();
+  await expect(page.getByText('Purchases are paused while checkout is unavailable.')).toBeVisible();
+  await expect(page.locator('a[href*="/checkout"]')).toHaveCount(0);
+});
+
 test('demo sample records do not offer placeholder links as live destinations', async ({ page }) => {
   await page.goto('/demo');
   await expect(page.getByText('Open saved page')).toHaveCount(0);
@@ -74,9 +81,9 @@ test('demo sample records do not offer placeholder links as live destinations', 
 
 test('every site control meets the 44px mobile touch-target baseline', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const route of ['/', '/demo']) {
+  for (const route of ['/', '/demo', '/privacy', '/terms']) {
     await page.goto(route);
-    const undersized = await page.locator('button, input, textarea, .site-header nav a, footer nav a, .demo-banner a').evaluateAll(elements =>
+    const undersized = await page.locator('a[href], button, input, textarea').evaluateAll(elements =>
       elements.map(element => {
         const box = element.getBoundingClientRect();
         return { label: (element as HTMLElement).innerText || (element as HTMLInputElement).name || element.getAttribute('aria-label') || element.tagName, width: box.width, height: box.height };

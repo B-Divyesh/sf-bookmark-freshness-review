@@ -31,13 +31,13 @@ Audited 2026-08-28. Counts treat hyphenated phrases and numerals as one word. Na
 | The product has no cloud archive. | 6 | Pass |
 | It does not | 3 | Pass |
 | Upload an archive | 3 | Pass |
-| Scrape paywalled pages | 3 | Pass |
 | Guess why you saved a link | 6 | Pass |
 | Lock export behind payment | 4 | Pass |
 | Review a larger archive for $18 | 6 | Pass |
 | Free use includes 50 link-check attempts, every note, every decision, and HTML export. | 13 | Pass |
 | One payment removes the limit on this browser. | 8 | Pass |
-| Sociobot and Dodo handle payment and refunds. | 7 | Pass |
+| Purchases are paused while checkout is unavailable. | 7 | Pass |
+| Existing licenses still work. | 4 | Pass |
 | Review old bookmarks. | 3 | Pass |
 | Keep the archive yours. | 4 | Pass |
 

@@ -13,14 +13,14 @@ const fixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 </DL><p></DL><p>`;
 
 describe('bookmark archive format', () => {
-  test('@claim:html-import imports standard bookmark HTML', () => {
+  test('imports standard bookmark HTML at the core boundary', () => {
     const records = parseBookmarkHtml(fixture);
     expect(records).toHaveLength(2);
     expect(records[0]).toMatchObject({ title: 'Useful & old', folder: 'Methods & tools', addedAt: 1_500_000_000_000 });
     expect(records[1].duplicateOf).toBe(records[0].id);
   });
 
-  test('@claim:duplicate-detection ignores tracking parameters', () => {
+  test('detects tracking variants at the core boundary', () => {
     expect(normalizeUrl('https://EXAMPLE.com/a/?utm_campaign=x#part')).toBe('https://example.com/a');
     expect(markDuplicates(parseBookmarkHtml(fixture))[1].duplicateOf).toBeTruthy();
   });
@@ -48,11 +48,11 @@ describe('bookmark archive format', () => {
     expect(classifyHttpStatus(200)).toBe('alive');
   });
 
-  test('@claim:credential-free-checks omits browser credentials from link checks', () => {
+  test('omits browser credentials from link checks at the core boundary', () => {
     expect(linkRequestInit()).toMatchObject({ method: 'GET', credentials: 'omit', redirect: 'follow' });
   });
 
-  test('@claim:request-spacing enforces host spacing and Retry-After limits', () => {
+  test('calculates host spacing and Retry-After limits at the core boundary', () => {
     expect(MIN_HOST_INTERVAL_MS).toBeGreaterThanOrEqual(1_500);
     expect(retryDelay('10')).toBe(10_000);
     expect(retryDelay('600')).toBe(600_000);
