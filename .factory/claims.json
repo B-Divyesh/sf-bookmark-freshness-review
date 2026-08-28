@@ -1,72 +1,14 @@
 [
-  {
-    "id": "local-demo",
-    "claim": "Archive data stays in your browser.",
-    "where": "landing facts and privacy page",
-    "test": "npx playwright test --grep @claim:local-demo",
-    "sandbox": "fresh browser context at /demo; edit a note; assert only the demo: key exists and every request stays same-origin"
-  },
-  {
-    "id": "status-separation",
-    "claim": "Dead pages and failed checks stay separate.",
-    "where": "demo review groups and terms",
-    "test": "npx playwright test --grep @claim:status-separation",
-    "sandbox": "sample data; select each group and assert its distinct result and reason"
-  },
-  {
-    "id": "explicit-checks",
-    "claim": "Checks start only when you ask.",
-    "where": "landing facts and README",
-    "test": "npx playwright test --grep @claim:explicit-checks",
-    "sandbox": "fresh /demo; assert no completion before action, press Run sample check, then assert the completion announcement"
-  },
-  {
-    "id": "html-import",
-    "claim": "Imports standard browser bookmark HTML.",
-    "where": "how it works and README",
-    "test": "npx vitest run -t @claim:html-import",
-    "sandbox": "bundled Netscape bookmark fixture; assert title, folder, timestamp, and record count"
-  },
-  {
-    "id": "duplicate-detection",
-    "claim": "Finds duplicate URLs after removing common tracking parameters.",
-    "where": "README and product review group",
-    "test": "npx vitest run -t @claim:duplicate-detection",
-    "sandbox": "bundled bookmark fixture with a UTM variant and canonical URL"
-  },
-  {
-    "id": "url-repair",
-    "claim": "Repairs a moved bookmark URL.",
-    "where": "how it works, demo, extension, and README",
-    "test": "npx playwright test --grep @claim:url-repair",
-    "sandbox": "fresh /demo; edit a bookmark URL, reload, and assert the repaired URL stays in the demo namespace"
-  },
-  {
-    "id": "credential-free-checks",
-    "claim": "Link checks omit browser credentials.",
-    "where": "privacy page and README",
-    "test": "npx vitest run -t @claim:credential-free-checks",
-    "sandbox": "unit fixture; assert request options use credentials: omit and do not inherit a signed-in session"
-  },
-  {
-    "id": "request-spacing",
-    "claim": "The checker spaces requests apart and honors Retry-After limits.",
-    "where": "privacy page and implementation documentation",
-    "test": "npx vitest run -t @claim:request-spacing",
-    "sandbox": "unit fixture; assert the minimum host interval and full Retry-After delay"
-  },
-  {
-    "id": "html-export",
-    "claim": "Standard HTML export is always free.",
-    "where": "landing facts, demo toolbar, and README",
-    "test": "npx playwright test --grep @claim:html-export",
-    "sandbox": "fresh /demo; download kept bookmarks; assert Netscape header and a kept sample record"
-  },
-  {
-    "id": "paid-license",
-    "claim": "An $18 one-time license removes the 50-check limit.",
-    "where": "paid tier, extension license panel, and README",
-    "test": "npx playwright test --grep @claim:paid-license",
-    "sandbox": "fresh home page with a test license; mock the documented verify response; assert licensed state and namespaced storage"
-  }
+  {"id":"local-demo","claim":"Sample demo changes stay in a separate browser-storage namespace.","where":"demo banner and demo documentation","test":"npx playwright test --grep @claim:local-demo","sandbox":"fresh browser context at /demo; edit a note; assert only the demo: key exists and every request stays same-origin"},
+  {"id":"extension-local-storage","claim":"Imported archives and edits stay in extension local storage without a hosted request.","where":"landing privacy boundary, privacy page, README","test":"npm run build:extension && npx playwright test --grep @claim:extension-local-storage","sandbox":"fresh Chromium profile with the packaged MV3 extension; import HTML and edit a note; assert chrome.storage.local contains the archive and no non-extension request occurs"},
+  {"id":"site-local-resources","claim":"This site loads no analytics, advertising scripts, or third-party fonts.","where":"privacy page","test":"npx playwright test --grep @claim:site-local-resources","sandbox":"fresh browser context; visit every public site route and assert every runtime request is same-origin"},
+  {"id":"status-separation","claim":"Dead pages and failed checks stay separate.","where":"demo review groups and terms","test":"npx playwright test --grep @claim:status-separation","sandbox":"sample data; select each group and assert its distinct result and reason"},
+  {"id":"explicit-checks","claim":"Checks start only when you ask.","where":"landing facts and README","test":"npx playwright test --grep @claim:explicit-checks","sandbox":"fresh /demo; assert no completion before action, press Run sample check, then assert the completion announcement"},
+  {"id":"html-import","claim":"Imports standard browser bookmark HTML.","where":"how it works and README","test":"npx vitest run -t @claim:html-import","sandbox":"bundled Netscape bookmark fixture; assert title, folder, timestamp, and record count"},
+  {"id":"duplicate-detection","claim":"Finds duplicate URLs after removing common tracking parameters.","where":"README and product review group","test":"npx vitest run -t @claim:duplicate-detection","sandbox":"bundled bookmark fixture with a UTM variant and canonical URL"},
+  {"id":"url-repair","claim":"Repairs a moved bookmark URL.","where":"how it works, demo, extension, and README","test":"npx playwright test --grep @claim:url-repair","sandbox":"fresh /demo; edit a bookmark URL, reload, and assert the repaired URL stays in the demo namespace"},
+  {"id":"credential-free-checks","claim":"Link checks omit browser credentials.","where":"privacy page and README","test":"npx vitest run -t @claim:credential-free-checks","sandbox":"unit fixture; assert request options use credentials: omit and do not inherit a signed-in session"},
+  {"id":"request-spacing","claim":"The checker spaces requests apart and honors Retry-After limits.","where":"privacy page and implementation documentation","test":"npx vitest run -t @claim:request-spacing","sandbox":"unit fixture; assert the minimum host interval and full Retry-After delay"},
+  {"id":"html-export","claim":"Standard HTML export is always free.","where":"landing facts, demo toolbar, and README","test":"npx playwright test --grep @claim:html-export","sandbox":"fresh /demo; download kept bookmarks; assert Netscape header and a kept sample record"},
+  {"id":"paid-license","claim":"An $18 one-time license removes the 50-check limit.","where":"paid tier, extension license panel, terms, and README","test":"npm run build:extension && npx playwright test --grep @claim:paid-license","sandbox":"packaged MV3 extension with 51 invalid-URL fixtures; exhaust 50 attempts, prove a retry cannot bypass the cap, mock a valid license verification, and assert every visible record can be checked again"}
 ]

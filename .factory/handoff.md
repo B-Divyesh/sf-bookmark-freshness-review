@@ -1,94 +1,60 @@
-# Handoff — Bookmark Freshness Review
+# Repair handoff — Bookmark Freshness Review
 
-## Independent verification status: **FAIL — do not release**
+Completed 2026-08-28 for work order `bookmark-freshness-review-repair-1`.
 
-Verified 2026-08-28 for work order `bookmark-freshness-review-verify-1` against candidate `edc41441cd09da05d9c97d2a33907fea3f099566` and <https://bookmark-freshness-review.sociobot.in>.
+The repair addresses every release blocker in independent report commit `7e9ee22bf2603780159f32b530efb1b8e9356323` for candidate `edc41441cd09da05d9c97d2a33907fea3f099566`. The browser-extension artifact class and WXT + TypeScript MV3 stack are unchanged.
 
-The live site and packaged extension match the fresh production build byte-for-byte and core workflows pass. Release is blocked by the claims contract (material privacy/paid-limit claims are not all registered and observably tested), sub-44 px mobile interaction targets, and six dead demo “Open saved page” actions. See [verification-1.md](verification-1.md) for command-level evidence, the complete claim table, and severity-ranked repair work.
+## Findings repaired
 
-The previously recorded “PASS” evidence below is builder handoff history, not the current independent release decision. `verify-url.sh` was not present in this checkout despite its previous mention.
+- Claims: `.factory/claims.json` now separates demo storage, real extension storage, and site-resource privacy. Each of its 12 claims has exactly one tagged regression.
+- Paid limit: link-check attempts are persisted per bookmark. Failed retries consume another attempt. Legacy checked records count as one attempt. The packaged extension stops at 50 attempts and a valid license removes the cap.
+- Mobile targets: site and extension navigation, demo actions, form fields, skip links, and decision buttons have at least 44 px hit boxes. Adjacent controls retain at least 8 px spacing.
+- Demo links: simulated sample URLs are plain text. The demo no longer offers six placeholder domains as live destinations.
+- URL verification: `scripts/verify-url.sh` is executable and checks HTTP success, title, language, one `h1`, one `main`, image alt text, and browser console errors.
+- Real 404: Azure Static Web Apps now rewrites only `/demo`, `/privacy`, and `/terms` to the SPA. Unknown paths preserve HTTP 404 and render the product-specific `404.html`.
+- Additional hardening: the light and dark treatments now pass automated serious/critical accessibility checks. The packaged extension also retains notes and decisions offline.
 
----
+## Exact regression coverage
 
-Completed 2026-08-28 for work order `bookmark-freshness-review-build-1`.
+- `tests/e2e/extension.spec.ts`: real packaged MV3 import/edit storage boundary; exact 50-attempt cap and retry behavior; valid-license unlimited behavior; offline persistence; 390 px targets; dark-theme axe scan.
+- `tests/e2e/site.spec.ts`: separate site-resource privacy claim; removal of placeholder outbound links; 390 px target measurements; keyboard filter/decision operation; light and dark axe scans.
+- `tests/unit/bookmarks.test.ts`: repeat-attempt accounting, 49/50/51 boundaries, legacy checked-record fallback, and licensed allowance.
+- `tests/unit/static-config.test.ts`: explicit SPA routes and a 404 override that does not convert unknown paths to 200.
 
-## What shipped
+## Verification evidence
 
-- A WXT and TypeScript Manifest V3 extension in `.output/chrome-mv3/`.
-- A packaged Chrome extension at `dist/site/downloads/bookmark-freshness-review.zip`.
-- A static Vite site in `dist/site/` with `/`, `/demo`, `/privacy`, `/terms`, and a styled 404 route.
-- Local Netscape bookmark HTML import and export.
-- On-demand, sequential URL checks with a 750 ms global interval and a 1.5 second per-host interval.
-- `Retry-After` handling that skips new requests to a rate-limited host until its delay ends.
-- Separate alive, dead, restricted, moved or canonical-changed, failed, and unchecked states.
-- Duplicate detection after canonical URL normalization and common tracking-parameter removal.
-- Older-than-two-years grouping, editable URLs, purpose or browser-context notes, and keep/review/archive decisions.
-- Undo for archive decisions and HTML export that excludes archived records.
-- A 50-check free tier. An $18 one-time license removes the check limit.
-- Sociobot checkout, pasted-license restore, namespaced token storage, at-most-daily verification on open, and cached offline access.
-- An isolated demo with six realistic records, reset, export, URL repair, notes, and decisions.
-- Original concrete-and-moss art, responsive WebP files, self-hosted fonts, social metadata, icons, and security-header configuration.
+All checks ran from a clean `npm ci` install with Playwright 1.58.2.
 
-No infrastructure, DNS, billing registration, or live deployment was changed.
+- `npm ci`: pass; 174 packages installed; 0 vulnerabilities.
+- Every command in `.factory/claims.json`: pass individually; all 12 claim tags occur exactly once.
+- `npm run typecheck`: pass. The repository has no separate lint tool; `tsc --noEmit` and `git diff --check` pass.
+- `npm test`: pass; production build, 9 Vitest tests, and 18 Playwright tests.
+- `npm run build`: pass; produced `dist/site/`, `.output/chrome-mv3/`, and the staged extension ZIP.
+- Package smoke: `unzip -t dist/site/downloads/bookmark-freshness-review.zip` reports no errors; its manifest is MV3 with the options page and background service worker.
+- Azure SWA emulator: `/`, `/demo`, `/privacy`, and `/terms` returned 200; `/not-a-route` returned 404.
+- Restored URL helper: all four public routes passed title, `lang=en`, one `h1`, one `main`, alt-text, and console checks.
+- Accessibility: axe found no serious or critical issue across public routes in light and dark treatments or in the real extension dark treatment. Keyboard filter and decision controls passed. Desktop and 390 × 844 screenshots were visually inspected with no clipping or horizontal overflow.
+- Offline: the packaged extension displayed its offline state, saved a note, reloaded, and retained the note without network access.
+- Privacy: site routes made same-origin requests only. Real extension import/edit persisted under `archive:v1` and made no non-extension request.
+- Response policy: 40 concurrent invalid-license requests produced 30 HTTP 200 and 10 HTTP 429 responses; `Retry-After` was 4 seconds.
+- Lighthouse 13.4.1 mobile against the production output: Performance 99, Accessibility 100, Best Practices 100, SEO 100; FCP 1.3 s, LCP 1.7 s, TBT 90 ms, CLS 0.
+- Budgets: site JS 18,297 bytes raw / 6,747 bytes gzip; CSS 15,928 bytes raw / 4,417 bytes gzip; mobile hero 39,606 bytes; extension ZIP 110,391 bytes.
 
-## Run and verify
+## Deployment and live identity
 
-```sh
-npm install
-npm run typecheck
-npm test
-npm run build:site
-```
+Deployed `dist/site/` with `/opt/fleet/lib/deploy-static.sh bookmark-freshness-review dist/site` to the existing Standard Azure Static Web App `sf-bookmark-freshness-review` in Central US (deployment `156fa81a-119d-40f3-ae5c-d8381f2e87d2`).
 
-The exact production command is `npm run build:site`. It writes `dist/site/index.html` and stages the extension ZIP inside the deploy root.
+Live verification at <https://bookmark-freshness-review.sociobot.in>:
 
-Verification completed from the production build:
+- `/`, `/demo`, `/privacy`, and `/terms`: HTTP 200.
+- `/not-a-route`: HTTP 404 with the styled recovery page.
+- JS, CSS, mobile hero, and downloadable ZIP: SHA-256 match the locally tested production output.
+- CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, and `Permissions-Policy`: present.
+- Factory URL verifier: pass; no console errors.
 
-- `npm run typecheck`: pass.
-- `npm audit`: 0 vulnerabilities.
-- `npm test`: pass; 7 Vitest tests and 9 Playwright tests.
-- All ten claims in `.factory/claims.json`: pass through their listed commands.
-- Axe: no serious or critical findings on home, demo, privacy, terms, or 404 routes.
-- Factory `verify-url.sh`: 200 response, `lang=en`, one `h1`, one `main`, zero missing alt text, zero unlabeled buttons, and zero console errors.
-- Headed Chromium extension smoke test: MV3 worker loaded, two fixture bookmarks imported, six isolated demo records rendered, and zero console errors.
-- Mobile check: no horizontal overflow at 390 × 844 and a visible keyboard focus path.
-- Internal-link crawl: every same-origin link returned 200.
+## Known gaps
 
-Lighthouse 13.4.1 mobile simulation against `dist/site/`:
-
-| Category or metric | Result |
-| --- | ---: |
-| Performance | 100 |
-| Accessibility | 100 |
-| Best practices | 100 |
-| SEO | 100 |
-| First contentful paint | 1.1 s |
-| Largest contentful paint | 1.7 s |
-| Total blocking time | 0 ms |
-| Cumulative layout shift | 0 |
-
-Budgets:
-
-- Site JavaScript: 18.31 KB raw, 6.75 KB gzip.
-- Site CSS: 15.70 KB raw, 4.36 KB gzip.
-- Loaded WOFF2 fonts: 53.33 KB total.
-- Mobile hero WebP: 39.61 KB; desktop hero WebP: 119.42 KB.
-- Extension: 128.11 KB unpacked; 110.30 KB ZIP.
-
-## Privacy and product choices
-
-- Real archive data uses `chrome.storage.local` under `archive:v1`.
-- Extension demo data uses `demo:archive:v1`; site demo data uses `demo:bookmark-freshness-review:v1`.
-- Sample mode never reads or overwrites a real archive.
-- Bookmark checks send only the selected URL to its own host and omit browser credentials.
-- The site has no analytics or third-party runtime scripts.
-- The one-time price was set to $18 because the brief required paid monetization but gave no price.
-- Export, notes, repairs, decisions, and accessibility features remain free.
-
-## Known gaps and next steps
-
-- The factory must register the paid product and configure the live checkout return URL before release.
-- The packaged build targets Chromium MV3. Firefox and Safari packages need separate review and signing.
-- “Moved or changed” means an HTTP redirect or changed canonical URL. V1 does not snapshot or diff page content.
-- Some sites block extension requests. Those results stay labeled as restricted or failed instead of dead.
-- Live URL checking was not run against third-party sites during verification. Automated tests use local fixtures and the isolated demo.
+- The Sociobot checkout endpoint currently returns HTTP 404 `enabled factory product`. Product registration is factory-owned and is explicitly outside this repository's billing permissions. License verification is live and returns the documented invalid verdict; its rate limiting is active.
+- The packaged build targets Chromium MV3. Firefox and Safari still require separate packaging and signing.
+- “Moved or changed” means an HTTP redirect or changed canonical URL; this version does not snapshot or diff page content.
+- Some sites block extension requests. Those results remain labelled restricted or failed rather than dead.

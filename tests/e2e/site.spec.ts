@@ -12,6 +12,15 @@ test('@claim:local-demo demo keeps bookmark data local', async ({ page }) => {
   expect(external).toEqual([]);
 });
 
+test('@claim:site-local-resources site loads no analytics, advertising scripts, or third-party fonts', async ({ page }) => {
+  const external: string[] = [];
+  page.on('request', request => {
+    if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') external.push(request.url());
+  });
+  for (const route of ['/', '/demo', '/privacy', '/terms']) await page.goto(route);
+  expect(external).toEqual([]);
+});
+
 test('@claim:status-separation separates dead pages from failed checks', async ({ page }) => {
   await page.goto('/demo');
   await page.getByRole('button', { name: /Dead pages/ }).click();
@@ -49,11 +58,32 @@ test('@claim:html-export exports kept bookmarks as standard HTML', async ({ page
   expect(content).toContain('Field Notes on Durable Web Archives');
 });
 
-test('@claim:paid-license accepts a valid one-time license', async ({ page }) => {
+test('accepts a valid one-time license return', async ({ page }) => {
   await page.route('https://api.sociobot.in/**', route => route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } }));
   await page.goto('/?license=test-license');
   await expect(page.getByText('Full review is active on this browser.')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toContain('test-license');
+});
+
+test('demo sample records do not offer placeholder links as live destinations', async ({ page }) => {
+  await page.goto('/demo');
+  await expect(page.getByText('Open saved page')).toHaveCount(0);
+  await expect(page.locator('.demo-record a[target="_blank"]')).toHaveCount(0);
+  await expect(page.getByText('Sample address: archive.example.org').first()).toBeVisible();
+});
+
+test('every site control meets the 44px mobile touch-target baseline', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const route of ['/', '/demo']) {
+    await page.goto(route);
+    const undersized = await page.locator('button, input, textarea, .site-header nav a, footer nav a, .demo-banner a').evaluateAll(elements =>
+      elements.map(element => {
+        const box = element.getBoundingClientRect();
+        return { label: (element as HTMLElement).innerText || (element as HTMLInputElement).name || element.getAttribute('aria-label') || element.tagName, width: box.width, height: box.height };
+      }).filter(target => target.width > 0 && target.height > 0 && (target.width < 44 || target.height < 44))
+    );
+    expect(undersized, route).toEqual([]);
+  }
 });
 
 test('routes expose one h1, navigation, and no serious accessibility issues', async ({ page }) => {
@@ -63,6 +93,15 @@ test('routes expose one h1, navigation, and no serious accessibility issues', as
     await expect(page.locator('h1')).toHaveCount(1);
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual([]);
+  }
+});
+
+test('dark treatment has no serious accessibility issues', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  for (const route of ['/', '/demo', '/privacy', '/terms']) {
+    await page.goto(route);
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? '')), route).toEqual([]);
   }
 });
 
@@ -82,4 +121,16 @@ test('mobile demo stays within the viewport and keyboard focus is visible', asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.keyboard.press('Tab');
   await expect(page.locator('.skip-link')).toBeFocused();
+});
+
+test('keyboard users can operate demo filters and decisions', async ({ page }) => {
+  await page.goto('/demo');
+  const deadFilter = page.getByRole('button', { name: /Dead pages/ });
+  await deadFilter.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('heading', { level: 2, name: 'Dead page' })).toBeFocused();
+  const archive = page.getByRole('button', { name: 'Archive' });
+  await archive.focus();
+  await page.keyboard.press('Enter');
+  await expect(archive).toHaveAttribute('aria-pressed', 'true');
 });

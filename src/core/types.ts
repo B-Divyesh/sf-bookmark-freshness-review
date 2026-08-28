@@ -12,6 +12,8 @@ export interface BookmarkRecord {
   state: LinkState;
   statusCode?: number;
   checkedAt?: number;
+  /** Number of requests made for this bookmark. Kept separately from its last result. */
+  checkAttempts?: number;
   finalUrl?: string;
   canonicalUrl?: string;
   error?: string;

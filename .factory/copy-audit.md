@@ -28,15 +28,15 @@ Audited 2026-08-28. Counts treat hyphenated phrases and numerals as one word. Na
 | Your archive is not our dataset | 6 | Pass |
 | The extension stores bookmarks, notes, and decisions in browser storage. | 9 | Pass |
 | A link check contacts only the site for that link. | 10 | Pass |
-| No analytics, account, hosted sync, or AI summary sits between you and the archive. | 14 | Pass |
+| The product has no cloud archive. | 6 | Pass |
 | It does not | 3 | Pass |
 | Upload an archive | 3 | Pass |
 | Scrape paywalled pages | 3 | Pass |
 | Guess why you saved a link | 6 | Pass |
 | Lock export behind payment | 4 | Pass |
 | Review a larger archive for $18 | 6 | Pass |
-| Free use includes 50 link checks, every note, every decision, and HTML export. | 13 | Pass |
-| One payment removes the check limit on your devices. | 9 | Pass |
+| Free use includes 50 link-check attempts, every note, every decision, and HTML export. | 13 | Pass |
+| One payment removes the limit on this browser. | 8 | Pass |
 | Sociobot and Dodo handle payment and refunds. | 7 | Pass |
 | Review old bookmarks. | 3 | Pass |
 | Keep the archive yours. | 4 | Pass |
@@ -49,7 +49,7 @@ First-screen read-aloud check: “Review old bookmarks before they rot. For rese
 | --- | --- |
 | A saved URL and its title | bookmark |
 | The imported collection | archive |
-| A network attempt to inspect one URL | check |
+| A network attempt to inspect one URL | link-check attempt |
 | A request that could not establish page health | failed check |
 | A confirmed HTTP 404 or 410 | dead page |
 | A saved explanation or browser requirement | note |

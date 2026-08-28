@@ -75,7 +75,7 @@ export function markDuplicates(records: BookmarkRecord[]): BookmarkRecord[] {
 }
 
 export function applyCheck(record: BookmarkRecord, result: CheckResult): BookmarkRecord {
-  return { ...record, ...result, checkedAt: Date.now() };
+  return { ...record, ...result, checkedAt: Date.now(), checkAttempts: (record.checkAttempts ?? (record.checkedAt ? 1 : 0)) + 1 };
 }
 
 export function isOlderThanTwoYears(record: BookmarkRecord, now = Date.now()): boolean {

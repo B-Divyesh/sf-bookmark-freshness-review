@@ -1,5 +1,6 @@
 import './style.css';
 import { applyCheck, exportBookmarkHtml, isOlderThanTwoYears, markDuplicates, parseBookmarkHtml } from '../../src/core/bookmarks';
+import { checkAllowance, FREE_CHECK_LIMIT, usedCheckAttempts } from '../../src/core/check-limit';
 import { CHECKOUT_URL, LICENSE_KEY, verifyLicense, type LicenseCache } from '../../src/core/license';
 import { sampleBookmarks } from '../../src/core/sample';
 import type { BookmarkRecord, LinkState } from '../../src/core/types';
@@ -46,7 +47,7 @@ function render() {
       <aside class="filter-rail" aria-label="Review groups">
         <h2>Review groups</h2>${filterButton('all', 'All bookmarks')}${filterButton('stale', 'Older than 2 years')}${filterButton('dead', 'Dead pages')}${filterButton('failed', 'Failed checks')}${filterButton('restricted', 'Login or restricted')}${filterButton('redirected', 'Moved or changed')}${filterButton('duplicates', 'Duplicates')}${filterButton('archive', 'Marked for archive')}
         <section class="progress-slab"><h2>Review progress</h2><strong>${progress()}%</strong><span>${records.filter(r => r.decision !== 'review').length} of ${records.length} decided</span><div><i style="width:${progress()}%"></i></div></section>
-        <section class="license-slab"><h2>${license?.valid ? 'Full review active' : 'Review larger archives'}</h2><p>${license?.valid ? 'Your license allows unlimited link checks.' : 'Free includes 50 checks. Pay $18 once for unlimited checks.'}</p>${license?.valid ? '' : `<a class="buy-link" href="${CHECKOUT_URL}" target="_blank" rel="noreferrer">Buy the full review <span class="sr-only">(opens in a new tab)</span></a><button data-action="license">Paste a license</button>`}</section>
+        <section class="license-slab"><h2>${license?.valid ? 'Full review active' : 'Review larger archives'}</h2><p>${license?.valid ? 'Your license allows unlimited link checks.' : `${usedCheckAttempts(records)} of ${FREE_CHECK_LIMIT} free link checks used. Pay $18 once for unlimited checks.`}</p>${license?.valid ? '' : `<a class="buy-link" href="${CHECKOUT_URL}" target="_blank" rel="noreferrer">Buy the full review <span class="sr-only">(opens in a new tab)</span></a><button data-action="license">Paste a license</button>`}</section>
       </aside>
       <section class="ledger" aria-labelledby="ledger-title">
         <div class="ledger-head"><div><p class="eyebrow">Current group</p><h2 id="ledger-title" tabindex="-1">${filterLabel(filter)}</h2></div><span>${shown.length} shown</span></div>
@@ -106,7 +107,7 @@ async function checkVisible() {
   if (!navigator.onLine) { announce('You are offline. Reconnect before checking links.'); return; }
   checking = true; render();
   const visible = filteredRecords().filter(record => record.state === 'unchecked' || record.state === 'failed');
-  const allowance = license?.valid ? visible.length : Math.max(0, 50 - records.filter(r => r.checkedAt).length);
+  const allowance = checkAllowance(records, license?.valid === true);
   for (const record of visible.slice(0, allowance)) {
     const result = await chrome.runtime.sendMessage({ type: 'CHECK_LINK', url: record.url });
     records = records.map(item => item.id === record.id ? applyCheck(item, result) : item);

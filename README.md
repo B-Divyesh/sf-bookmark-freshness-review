@@ -18,7 +18,7 @@ One-click demo: <https://bookmark-freshness-review.sociobot.in/demo>
 - Keeps archive data in extension storage on your device.
 - Exports kept bookmarks as standard HTML. Export is always free.
 
-The free tier includes 50 link checks. An $18 one-time license removes that limit. Notes, decisions, repair, and export remain free.
+The free tier includes 50 link-check attempts. Retrying a failed check uses another attempt. An $18 one-time license removes that limit. Notes, decisions, repair, and export remain free.
 
 ## Install the packaged extension
 
@@ -58,7 +58,7 @@ Load `.output/chrome-mv3/` as an unpacked extension during development. The prod
 
 ## Privacy and payment
 
-Bookmarks, notes, and decisions stay in browser extension storage. Link checks contact the saved websites only after an explicit action. License verification sends only the pasted license token to the Sociobot billing API.
+Imported bookmarks, notes, and decisions stay in browser extension storage. Importing or editing an archive makes no hosted request. Link checks contact saved websites only after an explicit action. License verification sends only the pasted license token to the Sociobot billing API.
 
 Sociobot and Dodo handle the $18 one-time purchase as merchant of record. The product never receives card details. See the live [privacy page](https://bookmark-freshness-review.sociobot.in/privacy) and [terms](https://bookmark-freshness-review.sociobot.in/terms).
 

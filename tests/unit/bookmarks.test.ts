@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { exportBookmarkHtml, isOlderThanTwoYears, markDuplicates, normalizeUrl, parseBookmarkHtml } from '../../src/core/bookmarks';
+import { applyCheck, exportBookmarkHtml, isOlderThanTwoYears, markDuplicates, normalizeUrl, parseBookmarkHtml } from '../../src/core/bookmarks';
 import { sampleBookmarks } from '../../src/core/sample';
+import { checkAllowance, FREE_CHECK_LIMIT, usedCheckAttempts } from '../../src/core/check-limit';
 import { classifyHttpStatus, linkRequestInit, MIN_HOST_INTERVAL_MS, retryDelay } from '../../src/core/link-status';
+import { verifyLicense } from '../../src/core/license';
 
 const fixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <TITLE>Bookmarks</TITLE><H1>Bookmarks</H1><DL><p>
@@ -54,5 +56,31 @@ describe('bookmark archive format', () => {
     expect(MIN_HOST_INTERVAL_MS).toBeGreaterThanOrEqual(1_500);
     expect(retryDelay('10')).toBe(10_000);
     expect(retryDelay('600')).toBe(600_000);
+  });
+
+  test('counts retries and enforces the exact free-check boundary', async () => {
+    const unchecked = { ...sampleBookmarks[0], checkedAt: undefined, checkAttempts: undefined, state: 'unchecked' as const };
+    const failedOnce = applyCheck(unchecked, { state: 'failed', error: 'Temporary failure.' });
+    const failedTwice = applyCheck(failedOnce, { state: 'failed', error: 'Temporary failure.' });
+    expect(failedOnce.checkAttempts).toBe(1);
+    expect(failedTwice.checkAttempts).toBe(2);
+    expect(usedCheckAttempts([{ ...sampleBookmarks[0], checkAttempts: undefined }])).toBe(1);
+
+    const records = Array.from({ length: FREE_CHECK_LIMIT }, (_, index) => ({
+      ...sampleBookmarks[0], id: `attempt-${index}`, checkAttempts: 1, checkedAt: Date.now()
+    }));
+    expect(usedCheckAttempts(records)).toBe(FREE_CHECK_LIMIT);
+    expect(checkAllowance(records.slice(0, FREE_CHECK_LIMIT - 1), false)).toBe(1);
+    expect(checkAllowance(records, false)).toBe(0);
+    expect(checkAllowance([...records, failedOnce], false)).toBe(0);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ valid: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    try {
+      expect(await verifyLicense('test-license')).toBe(true);
+      expect(checkAllowance(records, true)).toBe(Number.POSITIVE_INFINITY);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
