@@ -1,0 +1,14 @@
+{
+  "slug": "bookmark-freshness-review",
+  "title": "Bookmark Freshness Review",
+  "summary": "Review old bookmarks, check their health, and export a clean local archive.",
+  "artifact_class": "browser-extension",
+  "user": "Researchers and professionals with years of saved links",
+  "smallest_useful_product": "A local browser extension that imports HTML bookmarks, checks status and canonical duplicates on demand, groups stale candidates, stores a purpose or browser-context note, and exports standard HTML.",
+  "monetization": "one-time",
+  "constraints": [
+    "Never transmit the archive by default",
+    "Throttle link checks and honor site limits",
+    "Clearly distinguish a failed request from a dead page"
+  ]
+}
