@@ -32,13 +32,21 @@ The artifact remains a WXT + TypeScript Chromium MV3 extension with a static lan
 
 ## Deployment and live identity
 
-Deployment evidence is appended after the committed repair is deployed with:
+Committed and pushed the repair to `main` as `cd59aee` before deploying the tested output with:
 
 ```sh
 /opt/fleet/lib/deploy-static.sh bookmark-freshness-review /work/repo/dist/site
 ```
 
 Live URL: <https://bookmark-freshness-review.sociobot.in>
+
+- Azure Static Web Apps deployment ID: `552b01c4-feeb-476f-af5f-39e763d41acd`; deployment status succeeded and the custom domain returned HTTP 200 with managed TLS.
+- Live `/`, `/demo`, `/privacy`, `/terms`, and `/404.html` pass the route helper. An unknown path returns HTTP 404.
+- Live headers include CSP, HSTS, `X-Content-Type-Options: nosniff`, strict-origin referrer policy, and a restrictive permissions policy.
+- Live dark demo: all six card headings resolve to `#f0eee2` on `#2b302a` at 11.57:1, with zero serious/critical Axe findings and zero third-party requests.
+- Downloaded live ZIP: integrity passed; extraction and fresh Chromium MV3 loading passed; the real demo showed six accessible dark cards and zero serious/critical Axe findings.
+- Live Lighthouse 13.4.1 mobile report: Performance 100, Accessibility 100, Best Practices 100, SEO 100; FCP 1.1 s, LCP 1.4 s, TBT 10 ms, CLS 0.039. The complete JSON report was written before Chromium's post-audit shutdown message.
+- Local and live SHA-256 values match for all four release identity files listed below.
 
 Local release SHA-256 values:
 
