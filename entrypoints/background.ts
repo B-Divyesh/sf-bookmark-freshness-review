@@ -33,7 +33,6 @@ async function checkLink(rawUrl: string): Promise<CheckResult> {
   const hostWait = Math.max(0, MIN_HOST_INTERVAL_MS - (now - (lastHostAt.get(url.hostname) ?? 0)));
   await delay(Math.max(globalWait, hostWait));
   lastRequestAt = Date.now();
-  lastHostAt.set(url.hostname, lastRequestAt);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
@@ -59,7 +58,13 @@ async function checkLink(rawUrl: string): Promise<CheckResult> {
     return { state: changed ? 'redirected' : 'alive', statusCode, finalUrl, canonicalUrl };
   } catch (error) {
     return { state: 'failed', error: readableError(error) };
-  } finally { clearTimeout(timeout); }
+  } finally {
+    clearTimeout(timeout);
+    // Start the same-host quiet period after the response finishes. Measuring
+    // from fetch start allowed connection setup on the first request to make
+    // server-observed arrivals closer together than MIN_HOST_INTERVAL_MS.
+    lastHostAt.set(url.hostname, Date.now());
+  }
 }
 
 function delay(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }

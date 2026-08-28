@@ -60,7 +60,7 @@ function previewLedger() {
 
 function demoPage() {
   const visible = demoRecords.filter(record => demoFilter === 'all' ? true : demoFilter === 'duplicates' ? Boolean(record.duplicateOf) : record.state === demoFilter);
-  return `<section class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span><button data-action="reset-demo">Reset demo</button><a class="button" href="/downloads/bookmark-freshness-review.zip" download>Start for real</a></span></section>
+  return `<section class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span><button data-action="reset-demo">Reset demo</button><button data-action="start-real">Start for real</button></span></section>
   <section class="demo-head"><p class="eyebrow">Six sample bookmarks</p><h1 tabindex="-1">Decide what still belongs</h1><p>Change a note or decision. Demo changes use a separate sandbox.</p><div><button class="button primary" data-action="sample-check">Run sample check</button><button class="button" data-action="export-demo">Export kept HTML</button></div></section>
   <section class="demo-workspace" aria-label="Sample bookmark review"><aside><h2>Review groups</h2>${demoFilterButton('all', 'All')}${demoFilterButton('dead', 'Dead pages')}${demoFilterButton('failed', 'Failed checks')}${demoFilterButton('restricted', 'Login or restricted')}${demoFilterButton('redirected', 'Moved or changed')}${demoFilterButton('duplicates', 'Duplicates')}</aside><div class="demo-ledger"><div class="demo-ledger-head"><h2 tabindex="-1">${demoFilter === 'all' ? 'All bookmarks' : demoFilter === 'duplicates' ? 'Duplicates' : statusText(demoFilter)}</h2><span>${visible.length} shown</span></div>${visible.length ? visible.map(demoRecord).join('') : '<div class="empty-demo"><h3>No bookmarks in this group</h3><p>Choose another group to see sample bookmarks.</p></div>'}</div></section>`;
 }
@@ -100,6 +100,13 @@ async function onAction(event: Event) {
   if (action === 'reset-demo') { localStorage.removeItem(DEMO_KEY); demoRecords = structuredClone(sampleBookmarks); demoFilter = 'all'; renderRoute(); announce('Demo reset.'); }
   if (action === 'export-demo') { download(exportBookmarkHtml(demoRecords.filter(r => r.decision !== 'archive'))); announce('Sample bookmarks exported as HTML.'); }
   if (action === 'sample-check') { const button = event.currentTarget as HTMLButtonElement; button.textContent = 'Checking sample…'; button.disabled = true; setTimeout(() => { renderRoute(); announce('Six sample checks finished. Dead pages and failed checks remain separate.'); }, 350); }
+  if (action === 'start-real') {
+    localStorage.removeItem(DEMO_KEY);
+    demoRecords = structuredClone(sampleBookmarks);
+    downloadExtension();
+    navigate('/');
+    announce('Demo discarded. Extension download started.');
+  }
   if (action === 'paste-license') await pasteLicense();
 }
 
@@ -120,6 +127,7 @@ async function pasteLicense() {
 }
 
 function download(content: string) { const url = URL.createObjectURL(new Blob([content], { type: 'text/html;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = 'reviewed-bookmarks.html'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 500); }
+function downloadExtension() { const a = document.createElement('a'); a.href = '/downloads/bookmark-freshness-review.zip'; a.download = 'bookmark-freshness-review.zip'; document.body.append(a); a.click(); a.remove(); }
 function navigate(path: string) { history.pushState({}, '', path); renderRoute(); requestAnimationFrame(() => root.querySelector<HTMLElement>('h1')?.focus()); announce(document.title); scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
 function announce(value: string) { routeStatus.textContent = value; }
 function isPlainClick(event: MouseEvent) { return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey; }

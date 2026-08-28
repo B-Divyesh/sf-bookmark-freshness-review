@@ -111,9 +111,9 @@ test('@claim:credential-free-checks omits browser cookies during a demo link che
   }
 });
 
-test('@claim:request-spacing spaces demo requests and honors Retry-After', async () => {
+test('@claim:request-spacing spaces demo requests and honors Retry-After', async ({}, testInfo) => {
   test.setTimeout(45_000);
-  const session = 'request-spacing';
+  const session = `request-spacing-${testInfo.workerIndex}-${Date.now()}`;
   const { context, page, userDataDir } = await openExtension('bookmark-review-spacing-');
   try {
     const fixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p>

@@ -12,6 +12,37 @@ test('@claim:local-demo demo keeps bookmark data local', async ({ page }) => {
   expect(external).toEqual([]);
 });
 
+test('desktop and mobile first screens show the sample action, explanation, and three facts', async ({ page }) => {
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    const firstScreen = [
+      page.getByRole('link', { name: 'Try it with sample data' }),
+      page.getByText('See six checked bookmarks. Nothing touches your archive.'),
+      page.locator('.plain-facts')
+    ];
+    for (const locator of firstScreen) {
+      await expect(locator).toBeVisible();
+      const box = await locator.boundingBox();
+      expect(box, await locator.textContent() ?? 'first-screen element').not.toBeNull();
+      expect(box!.y + box!.height, JSON.stringify(viewport)).toBeLessThanOrEqual(viewport.height);
+    }
+  }
+});
+
+test('Start for real downloads the extension, discards demo data, and exits the sandbox', async ({ page }) => {
+  await page.goto('/demo');
+  await page.getByLabel('Purpose or browser context').first().fill('This change must be discarded.');
+  await page.getByLabel('Purpose or browser context').first().blur();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Start for real' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('bookmark-freshness-review.zip');
+  await expect(page).toHaveURL('/');
+  await expect(page.locator('.demo-banner')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('demo:bookmark-freshness-review:v1'))).toBeNull();
+});
+
 test('@claim:site-local-resources site loads no analytics, advertising scripts, or third-party fonts', async ({ page }) => {
   const external: string[] = [];
   page.on('request', request => {
@@ -65,6 +96,29 @@ test('accepts a valid one-time license return', async ({ page }) => {
   expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toContain('test-license');
 });
 
+test('@claim:license-token-only license verification sends only the token and no archive data', async ({ page }) => {
+  const requests: Array<{ method: string; url: string; body: string | null; headers: Record<string, string> }> = [];
+  await page.route('https://api.sociobot.in/**', async route => {
+    const request = route.request();
+    requests.push({ method: request.method(), url: request.url(), body: request.postData(), headers: request.headers() });
+    await route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } });
+  });
+  await page.goto('/demo');
+  await page.getByLabel('Purpose or browser context').first().fill('PRIVATE ARCHIVE SENTINEL');
+  await page.getByLabel('Purpose or browser context').first().blur();
+  await page.goto('/?license=privacy-test-token');
+  await expect(page.getByText('Full review is active on this browser.')).toBeVisible();
+  expect(requests).toHaveLength(1);
+  const requestUrl = new URL(requests[0].url);
+  expect(requests[0].method).toBe('GET');
+  expect(requests[0].body).toBeNull();
+  expect(requestUrl.pathname).toBe('/api/v1/products/bookmark-freshness-review/verify');
+  expect([...requestUrl.searchParams.entries()]).toEqual([['license', 'privacy-test-token']]);
+  expect(JSON.stringify(requests[0])).not.toContain('PRIVATE ARCHIVE SENTINEL');
+  expect(requests[0].headers.authorization).toBeUndefined();
+  expect(requests[0].headers.cookie).toBeUndefined();
+});
+
 test('@claim:checkout-paused does not link to checkout while product registration is unavailable', async ({ page }) => {
   await page.goto('/demo');
   await page.getByRole('link', { name: 'Bookmark Freshness Review home' }).click();
@@ -81,7 +135,7 @@ test('demo sample records do not offer placeholder links as live destinations', 
 
 test('every site control meets the 44px mobile touch-target baseline', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const route of ['/', '/demo', '/privacy', '/terms']) {
+  for (const route of ['/', '/demo', '/privacy', '/terms', '/404.html']) {
     await page.goto(route);
     const undersized = await page.locator('a[href], button, input, textarea').evaluateAll(elements =>
       elements.map(element => {
