@@ -161,6 +161,30 @@ test('dark treatment has no serious accessibility issues', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   for (const route of ['/', '/demo', '/privacy', '/terms']) {
     await page.goto(route);
+    if (route === '/demo') {
+      const cards = await page.locator('.demo-record').evaluateAll(elements => elements.map(element => {
+        const heading = element.querySelector('h3')!;
+        const foreground = getComputedStyle(heading).color;
+        const background = getComputedStyle(element).backgroundColor;
+        const channels = (color: string) => color.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+        const luminance = (color: string) => {
+          const linear = channels(color).map(channel => {
+            const value = channel / 255;
+            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+        };
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return { state: [...element.classList].find(name => name.startsWith('state-')), foreground, background, contrast: (light + 0.05) / (dark + 0.05) };
+      }));
+      expect(cards.map(card => card.state).sort()).toEqual(['state-alive', 'state-alive', 'state-dead', 'state-failed', 'state-redirected', 'state-restricted']);
+      for (const card of cards) {
+        expect(card.foreground, card.state).toBe('rgb(240, 238, 226)');
+        expect(card.background, card.state).toBe('rgb(43, 48, 42)');
+        expect(card.contrast, card.state).toBeGreaterThanOrEqual(4.5);
+      }
+    }
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? '')), route).toEqual([]);
   }
