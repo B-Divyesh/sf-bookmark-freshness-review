@@ -7,7 +7,9 @@ export default defineConfig({
     version: '1.0.0',
     permissions: ['storage', 'unlimitedStorage'],
     host_permissions: ['<all_urls>'],
-    action: { default_title: 'Open Bookmark Freshness Review' }
+    icons: { 16: 'icon/16.png', 32: 'icon/32.png', 48: 'icon/48.png', 128: 'icon/128.png' },
+    action: { default_title: 'Open Bookmark Freshness Review', default_icon: { 16: 'icon/16.png', 32: 'icon/32.png' } },
+    options_ui: { page: 'options.html', open_in_tab: true }
   },
   outDir: '.output'
 });

@@ -49,7 +49,7 @@ function render() {
         <section class="license-slab"><h2>${license?.valid ? 'Full review active' : 'Review larger archives'}</h2><p>${license?.valid ? 'Your license allows unlimited link checks.' : 'Free includes 50 checks. Pay $18 once for unlimited checks.'}</p>${license?.valid ? '' : `<a class="buy-link" href="${CHECKOUT_URL}" target="_blank" rel="noreferrer">Buy the full review <span class="sr-only">(opens in a new tab)</span></a><button data-action="license">Paste a license</button>`}</section>
       </aside>
       <section class="ledger" aria-labelledby="ledger-title">
-        <div class="ledger-head"><div><p class="eyebrow">Current group</p><h2 id="ledger-title">${filterLabel(filter)}</h2></div><span>${shown.length} shown</span></div>
+        <div class="ledger-head"><div><p class="eyebrow">Current group</p><h2 id="ledger-title" tabindex="-1">${filterLabel(filter)}</h2></div><span>${shown.length} shown</span></div>
         <div class="record-list">${shown.length ? shown.map(recordCard).join('') : `<div class="empty-group"><h3>No bookmarks in this group</h3><p>Choose another group or run a link check.</p></div>`}</div>
       </section>
     </div>

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { exportBookmarkHtml, isOlderThanTwoYears, markDuplicates, normalizeUrl, parseBookmarkHtml } from '../../src/core/bookmarks';
 import { sampleBookmarks } from '../../src/core/sample';
-import { classifyHttpStatus } from '../../src/core/link-status';
+import { classifyHttpStatus, linkRequestInit, MIN_HOST_INTERVAL_MS, retryDelay } from '../../src/core/link-status';
 
 const fixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <TITLE>Bookmarks</TITLE><H1>Bookmarks</H1><DL><p>
@@ -44,5 +44,15 @@ describe('bookmark archive format', () => {
     expect(classifyHttpStatus(429)).toBe('restricted');
     expect(classifyHttpStatus(500)).toBe('failed');
     expect(classifyHttpStatus(200)).toBe('alive');
+  });
+
+  test('@claim:credential-free-checks omits browser credentials from link checks', () => {
+    expect(linkRequestInit()).toMatchObject({ method: 'GET', credentials: 'omit', redirect: 'follow' });
+  });
+
+  test('@claim:request-spacing enforces host spacing and Retry-After limits', () => {
+    expect(MIN_HOST_INTERVAL_MS).toBeGreaterThanOrEqual(1_500);
+    expect(retryDelay('10')).toBe(10_000);
+    expect(retryDelay('600')).toBe(60_000);
   });
 });

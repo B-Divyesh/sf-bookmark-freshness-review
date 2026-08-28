@@ -21,6 +21,22 @@ test('@claim:status-separation separates dead pages from failed checks', async (
   await expect(page.getByText('The site did not answer.')).toBeVisible();
 });
 
+test('@claim:explicit-checks starts checks only after a button press', async ({ page }) => {
+  await page.goto('/demo');
+  await expect(page.locator('#route-status')).toHaveText('');
+  await page.getByRole('button', { name: 'Run sample check' }).click();
+  await expect(page.locator('#route-status')).toContainText('Six sample checks finished.');
+});
+
+test('@claim:url-repair saves a repaired URL in the demo sandbox', async ({ page }) => {
+  await page.goto('/demo');
+  const input = page.getByLabel('Bookmark URL').first();
+  await input.fill('https://archive.example.org/repaired');
+  await input.blur();
+  await page.reload();
+  await expect(page.getByLabel('Bookmark URL').first()).toHaveValue('https://archive.example.org/repaired');
+});
+
 test('@claim:html-export exports kept bookmarks as standard HTML', async ({ page }) => {
   await page.goto('/demo');
   const downloadPromise = page.waitForEvent('download');
@@ -48,6 +64,16 @@ test('routes expose one h1, navigation, and no serious accessibility issues', as
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual([]);
   }
+});
+
+test('internal links resolve and route changes focus the page heading', async ({ page, request }) => {
+  await page.goto('/');
+  const internal = await page.locator('a[href]').evaluateAll(links => [...new Set(links.map(link => (link as HTMLAnchorElement).getAttribute('href')!).filter(href => href.startsWith('/')))]);
+  for (const href of internal) expect((await request.get(href)).status(), href).toBe(200);
+  await page.getByRole('link', { name: 'Demo', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
 });
 
 test('mobile demo stays within the viewport and keyboard focus is visible', async ({ page }) => {

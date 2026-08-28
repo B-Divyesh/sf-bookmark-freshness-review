@@ -4,6 +4,7 @@ dist/
 .wxt/
 test-results/
 playwright-report/
+.factory/evidence/
 site/public/downloads/
 .env
 *.log

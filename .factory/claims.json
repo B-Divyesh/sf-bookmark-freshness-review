@@ -14,6 +14,13 @@
     "sandbox": "sample data; select each group and assert its distinct result and reason"
   },
   {
+    "id": "explicit-checks",
+    "claim": "Checks start only when you ask.",
+    "where": "landing facts and README",
+    "test": "npx playwright test --grep @claim:explicit-checks",
+    "sandbox": "fresh /demo; assert no completion before action, press Run sample check, then assert the completion announcement"
+  },
+  {
     "id": "html-import",
     "claim": "Imports standard browser bookmark HTML.",
     "where": "how it works and README",
@@ -28,6 +35,27 @@
     "sandbox": "bundled bookmark fixture with a UTM variant and canonical URL"
   },
   {
+    "id": "url-repair",
+    "claim": "Repairs a moved bookmark URL.",
+    "where": "how it works, demo, extension, and README",
+    "test": "npx playwright test --grep @claim:url-repair",
+    "sandbox": "fresh /demo; edit a bookmark URL, reload, and assert the repaired URL stays in the demo namespace"
+  },
+  {
+    "id": "credential-free-checks",
+    "claim": "Link checks omit browser credentials.",
+    "where": "privacy page and README",
+    "test": "npx vitest run -t @claim:credential-free-checks",
+    "sandbox": "unit fixture; assert request options use credentials: omit and do not inherit a signed-in session"
+  },
+  {
+    "id": "request-spacing",
+    "claim": "The checker spaces requests apart and honors Retry-After limits.",
+    "where": "privacy page and implementation documentation",
+    "test": "npx vitest run -t @claim:request-spacing",
+    "sandbox": "unit fixture; assert the minimum host interval and bounded Retry-After delay"
+  },
+  {
     "id": "html-export",
     "claim": "Standard HTML export is always free.",
     "where": "landing facts, demo toolbar, and README",
@@ -36,7 +64,7 @@
   },
   {
     "id": "paid-license",
-    "claim": "A $18 one-time license removes the 50-check limit.",
+    "claim": "An $18 one-time license removes the 50-check limit.",
     "where": "paid tier, extension license panel, and README",
     "test": "npx playwright test --grep @claim:paid-license",
     "sandbox": "fresh home page with a test license; mock the documented verify response; assert licensed state and namespaced storage"

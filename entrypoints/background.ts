@@ -1,11 +1,12 @@
 import { normalizeUrl } from '../src/core/bookmarks';
 import type { CheckResult } from '../src/core/types';
 import { defineBackground } from 'wxt/utils/define-background';
-import { classifyHttpStatus } from '../src/core/link-status';
+import { classifyHttpStatus, linkRequestInit, MIN_HOST_INTERVAL_MS, retryDelay } from '../src/core/link-status';
 
 let queue = Promise.resolve();
 let lastRequestAt = 0;
 const lastHostAt = new Map<string, number>();
+const blockedUntil = new Map<string, number>();
 
 export default defineBackground(() => {
   chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
@@ -27,20 +28,19 @@ async function checkLink(rawUrl: string): Promise<CheckResult> {
 
   const now = Date.now();
   const globalWait = Math.max(0, 750 - (now - lastRequestAt));
-  const hostWait = Math.max(0, 1500 - (now - (lastHostAt.get(url.hostname) ?? 0)));
-  await delay(Math.max(globalWait, hostWait));
+  const hostWait = Math.max(0, MIN_HOST_INTERVAL_MS - (now - (lastHostAt.get(url.hostname) ?? 0)));
+  const limitWait = Math.max(0, (blockedUntil.get(url.hostname) ?? 0) - now);
+  await delay(Math.max(globalWait, hostWait, limitWait));
   lastRequestAt = Date.now();
   lastHostAt.set(url.hostname, lastRequestAt);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(url, {
-      method: 'GET', redirect: 'follow', credentials: 'omit', cache: 'no-store',
-      headers: { 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1' }, signal: controller.signal
-    });
+    const response = await fetch(url, { ...linkRequestInit(), signal: controller.signal });
     const finalUrl = response.url || url.toString();
     const statusCode = response.status;
+    if (statusCode === 429) blockedUntil.set(url.hostname, Date.now() + retryDelay(response.headers.get('retry-after')));
     const state = classifyHttpStatus(statusCode);
     if (state === 'dead' || state === 'restricted') return { state, statusCode, finalUrl };
     if (state === 'failed') return { state, statusCode, finalUrl, error: statusCode >= 500 ? `The site returned ${statusCode}. Try again later.` : `The site returned ${statusCode}.` };
