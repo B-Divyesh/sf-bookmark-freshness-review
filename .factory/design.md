@@ -15,7 +15,7 @@ The primary treatment is a warm light workbench. A dark treatment follows the op
 | `--moss` | `#365f2b` | `#9ac786` | action and living status |
 | `--moss-deep` | `#23431c` | `#c6e5b8` | action emphasis |
 | `--rust` | `#8a3c22` | `#ef9c79` | dead or destructive state |
-| `--lichen` | `#b18b20` | `#efd06e` | stale, restricted, waiting |
+| `--lichen` | `#6c5007` | `#efd06e` | stale, restricted, waiting |
 | `--line` | `#30382d` | `#7b8677` | structural rules |
 
 All text combinations are designed for at least 4.5:1 contrast. State text includes a word or symbol, never color alone.
@@ -50,4 +50,3 @@ The source PNG and prompt sidecar live in `assets/src/`. The shipped hero is an 
 
 - Hero image: generated for this product on 2026-08-28 with the Factory Azure image deployment through `/opt/fleet/lib/gen-image.sh`. Original work; prompt recorded in `assets/src/hero-concrete-moss.json`.
 - Moss-plot mark and icons: hand-authored for this repository on 2026-08-28. MIT licensed with the product.
-
