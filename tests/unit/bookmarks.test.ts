@@ -20,6 +20,21 @@ describe('bookmark archive format', () => {
     expect(records[1].duplicateOf).toBe(records[0].id);
   });
 
+  test('returns to the parent folder after a nested bookmark folder closes', () => {
+    const nested = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><H3>Parent</H3><DL><p>
+<DT><A HREF="https://example.com/parent-before">Parent before</A>
+<DT><H3>Child</H3><DL><p><DT><A HREF="https://example.com/child">Child item</A></DL><p>
+<DT><A HREF="https://example.com/parent-after">Parent after</A>
+</DL><p></DL><p>`;
+    const records = parseBookmarkHtml(nested);
+    expect(records.map(({ title, folder }) => ({ title, folder }))).toEqual([
+      { title: 'Parent before', folder: 'Parent' },
+      { title: 'Child item', folder: 'Child' },
+      { title: 'Parent after', folder: 'Parent' }
+    ]);
+  });
+
   test('detects tracking variants at the core boundary', () => {
     expect(normalizeUrl('https://EXAMPLE.com/a/?utm_campaign=x#part')).toBe('https://example.com/a');
     expect(markDuplicates(parseBookmarkHtml(fixture))[1].duplicateOf).toBeTruthy();

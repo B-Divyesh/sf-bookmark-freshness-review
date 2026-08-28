@@ -40,7 +40,13 @@ async function checkLink(rawUrl: string): Promise<CheckResult> {
     const response = await fetch(url, { ...linkRequestInit(), signal: controller.signal });
     const finalUrl = response.url || url.toString();
     const statusCode = response.status;
-    if (statusCode === 429) blockedUntil.set(url.hostname, Date.now() + retryDelay(response.headers.get('retry-after')));
+    // Retry-After is a server-directed quiet period for rate limits (429) and
+    // temporary overloads (503). Do not send another request to that host
+    // while it is active, even though a 503 itself remains a failed check.
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter && (statusCode === 429 || statusCode === 503)) {
+      blockedUntil.set(url.hostname, Date.now() + retryDelay(retryAfter));
+    }
     const state = classifyHttpStatus(statusCode);
     if (state === 'dead' || state === 'restricted') return { state, statusCode, finalUrl };
     if (state === 'failed') return { state, statusCode, finalUrl, error: statusCode >= 500 ? `The site returned ${statusCode}. Try again later.` : `The site returned ${statusCode}.` };

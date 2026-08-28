@@ -25,31 +25,44 @@ function idFor(url: string, index: number): string {
 }
 
 export function parseBookmarkHtml(html: string): BookmarkRecord[] {
-  const anchors = [...html.matchAll(/<A\s+([^>]*?)>([\s\S]*?)<\/A>/gi)];
-  const folders = [...html.matchAll(/<H3\b[^>]*>([\s\S]*?)<\/H3>/gi)].map(match => ({
-    position: match.index ?? 0,
-    name: decodeEntities(stripTags(match[1])).trim() || 'Imported'
-  }));
+  // Netscape exports describe a folder with an H3 followed by its own DL.
+  // Keep a DL stack instead of choosing the most recent H3: after a child
+  // DL closes, later anchors belong to the parent folder again.
+  const folderStack: Array<string | undefined> = [];
+  let pendingFolder: string | undefined;
+  const records: BookmarkRecord[] = [];
+  const tokens = /<\/?DL\b[^>]*>|<H3\b[^>]*>([\s\S]*?)<\/H3>|<A\b([^>]*?)>([\s\S]*?)<\/A>/gi;
 
-  const records = anchors.flatMap((match, index) => {
-    const attrs = match[1];
-    const href = attribute(attrs, 'HREF');
-    if (!href || !/^https?:\/\//i.test(href)) return [];
-    const addDate = Number(attribute(attrs, 'ADD_DATE'));
-    let nearestFolder = 'Imported';
-    for (const { position, name } of folders) {
-      if (position <= (match.index ?? 0)) nearestFolder = name;
-      else break;
+  for (const match of html.matchAll(tokens)) {
+    const token = match[0];
+    if (/^<\/DL\b/i.test(token)) {
+      folderStack.pop();
+      continue;
     }
-    return [{
-      id: idFor(href, index),
-      title: decodeEntities(stripTags(match[2])).trim() || new URL(href).hostname,
+    if (/^<DL\b/i.test(token)) {
+      folderStack.push(pendingFolder);
+      pendingFolder = undefined;
+      continue;
+    }
+    if (/^<H3\b/i.test(token)) {
+      pendingFolder = decodeEntities(stripTags(match[1] ?? '')).trim() || 'Imported';
+      continue;
+    }
+
+    const attrs = match[2] ?? '';
+    const href = attribute(attrs, 'HREF');
+    if (!href || !/^https?:\/\//i.test(href)) continue;
+    const addDate = Number(attribute(attrs, 'ADD_DATE'));
+    const folder = [...folderStack].reverse().find((name): name is string => Boolean(name)) ?? 'Imported';
+    records.push({
+      id: idFor(href, records.length),
+      title: decodeEntities(stripTags(match[3] ?? '')).trim() || new URL(href).hostname,
       url: decodeEntities(href),
-      folder: nearestFolder,
+      folder,
       addedAt: Number.isFinite(addDate) && addDate > 0 ? addDate * 1000 : undefined,
       note: '', decision: 'review' as const, state: 'unchecked' as const
-    }];
-  });
+    });
+  }
   return markDuplicates(records);
 }
 

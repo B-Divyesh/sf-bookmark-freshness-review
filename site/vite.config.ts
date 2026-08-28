@@ -21,7 +21,7 @@ function linkCheckFixture() {
           response.statusCode = status;
           response.setHeader('Content-Type', 'text/html; charset=utf-8');
           response.setHeader('Cache-Control', 'no-store');
-          if (status === 429) response.setHeader('Retry-After', url.searchParams.get('retryAfter') ?? '2');
+          if (url.searchParams.has('retryAfter')) response.setHeader('Retry-After', url.searchParams.get('retryAfter') ?? '2');
           response.end('<!doctype html><title>Link check fixture</title><link rel="canonical" href="/checked">');
           return;
         }

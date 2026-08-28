@@ -11,6 +11,13 @@ const importFixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <DT><A HREF="https://example.test/paper" ADD_DATE="1600000000">Clean paper</A>
 </DL><p></DL><p>`;
 
+const nestedImportFixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<DL><p><DT><H3>Parent</H3><DL><p>
+<DT><A HREF="https://example.test/parent-before">Parent before</A>
+<DT><H3>Child</H3><DL><p><DT><A HREF="https://example.test/child">Child item</A></DL><p>
+<DT><A HREF="https://example.test/parent-after">Parent after</A>
+</DL><p></DL><p>`;
+
 async function openExtension(userDataPrefix: string, path = '/options.html?demo=1') {
   const userDataDir = mkdtempSync(resolve(tmpdir(), userDataPrefix));
   const context = await chromium.launchPersistentContext(userDataDir, {
@@ -57,17 +64,27 @@ test('@claim:extension-local-storage imports and edits an archive without a host
   }
 });
 
-test('@claim:html-import imports standard bookmark HTML through the extension demo', async () => {
+test('@claim:html-import imports nested standard bookmark HTML through the packaged extension demo', async () => {
   const { context, page, userDataDir } = await openExtension('bookmark-review-import-');
   try {
-    await page.locator('#import-file').setInputFiles({ name: 'bookmarks.html', mimeType: 'text/html', buffer: Buffer.from(importFixture) });
-    await expect(page.getByText('2 bookmarks stay on this device.')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Tracked paper' })).toBeVisible();
+    await page.locator('#import-file').setInputFiles({ name: 'bookmarks.html', mimeType: 'text/html', buffer: Buffer.from(nestedImportFixture) });
+    await expect(page.getByText('3 bookmarks stay on this device.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Parent after' })).toBeVisible();
     const stored = await page.evaluate(async () => chrome.storage.local.get(null));
-    expect(stored['demo:archive:v1']).toEqual(expect.arrayContaining([
-      expect.objectContaining({ title: 'Tracked paper', folder: 'Research', addedAt: 1_500_000_000_000 })
-    ]));
+    expect((stored['demo:archive:v1'] as Array<{ title: string; folder: string }>).map(({ title, folder }) => ({ title, folder }))).toEqual([
+      { title: 'Parent before', folder: 'Parent' },
+      { title: 'Child item', folder: 'Child' },
+      { title: 'Parent after', folder: 'Parent' }
+    ]);
     expect(stored['archive:v1']).toBeUndefined();
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export kept HTML' }).click();
+    const download = await downloadPromise;
+    const stream = await download.createReadStream();
+    let exported = '';
+    for await (const chunk of stream!) exported += chunk.toString();
+    expect(exported).toContain('<H3>Parent</H3>\n  <DL><p>\n    <DT><A HREF="https://example.test/parent-before">Parent before</A>\n    <DT><A HREF="https://example.test/parent-after">Parent after</A>');
+    expect(exported).toContain('<H3>Child</H3>');
   } finally {
     await context.close();
     rmSync(userDataDir, { recursive: true, force: true });
@@ -111,7 +128,7 @@ test('@claim:credential-free-checks omits browser cookies during a demo link che
   }
 });
 
-test('@claim:request-spacing spaces demo requests and honors Retry-After', async ({}, testInfo) => {
+test('@claim:request-spacing spaces demo requests and honors 429 and 503 Retry-After limits', async ({}, testInfo) => {
   test.setTimeout(45_000);
   const session = `request-spacing-${testInfo.workerIndex}-${Date.now()}`;
   const { context, page, userDataDir } = await openExtension('bookmark-review-spacing-');
@@ -119,6 +136,8 @@ test('@claim:request-spacing spaces demo requests and honors Retry-After', async
     const fixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p>
       <DT><A HREF="http://127.0.0.1:4173/__test-link/${session}/spaced-one">Spacing one</A>
       <DT><A HREF="http://127.0.0.1:4173/__test-link/${session}/spaced-two">Spacing two</A>
+      <DT><A HREF="http://127.0.0.1:4173/__test-link/${session}/unavailable?status=503&amp;retryAfter=5">Temporarily unavailable</A>
+      <DT><A HREF="http://127.0.0.1:4173/__test-link/${session}/unavailable-follow-up">Unavailable follow-up</A>
       <DT><A HREF="http://localhost:4173/__test-link/${session}/limited?status=429&amp;retryAfter=3">Rate limited</A>
       <DT><A HREF="http://localhost:4173/__test-link/${session}/blocked">Blocked follow-up</A>
       </DL><p>`;
@@ -127,16 +146,22 @@ test('@claim:request-spacing spaces demo requests and honors Retry-After', async
     await expect.poll(async () => {
       const stored = await page.evaluate(async () => chrome.storage.local.get('demo:archive:v1'));
       return (stored['demo:archive:v1'] as Array<{ state: string }>).filter(record => record.state !== 'unchecked').length;
-    }, { timeout: 20_000 }).toBe(4);
+    }, { timeout: 20_000 }).toBe(6);
 
     const probes = await fetch(`http://127.0.0.1:4173/__test-log/${session}`).then(response => response.json()) as Array<{ path: string; at: number }>;
     const spaced = probes.filter(probe => probe.path.startsWith('spaced-'));
     expect(spaced).toHaveLength(2);
     expect(spaced[1].at - spaced[0].at).toBeGreaterThanOrEqual(1_450);
+    expect(probes.filter(probe => probe.path === 'unavailable')).toHaveLength(1);
+    // Wait through the full advertised window: a packaged extension must not
+    // send a same-host follow-up before a 503 Retry-After expires.
+    await page.waitForTimeout(5_100);
+    const after503 = await fetch(`http://127.0.0.1:4173/__test-log/${session}`).then(response => response.json()) as Array<{ path: string; at: number }>;
+    expect(after503.filter(probe => probe.path === 'unavailable-follow-up')).toHaveLength(0);
     expect(probes.filter(probe => probe.path === 'limited')).toHaveLength(1);
     expect(probes.filter(probe => probe.path === 'blocked')).toHaveLength(0);
     await page.getByRole('button', { name: /Login or restricted/ }).click();
-    await expect(page.getByText('2 shown')).toBeVisible();
+    await expect(page.getByText('3 shown')).toBeVisible();
   } finally {
     await context.close();
     rmSync(userDataDir, { recursive: true, force: true });
