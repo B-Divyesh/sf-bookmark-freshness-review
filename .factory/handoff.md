@@ -1,4 +1,24 @@
-# Repair handoff — Bookmark Freshness Review
+# Review 1 handoff — Bookmark Freshness Review
+
+Adversarial first-read review 1 was completed on 2026-08-29 against commit `fd6a9098b19111a71cf227d9b05ff6c56ab8cf88` and the live deployment. Verdict: **FAIL** with 36 findings in `.factory/review-1.md`.
+
+No product code was modified. The review added three compressed screenshots under `.factory/review-1-artifacts/`.
+
+Verification performed:
+
+- Fresh 390 × 844 and 1440 × 900 live first reads.
+- One-click live demo, reset, exit/download, real-storage sentinel, reload persistence, and same-origin request capture.
+- All 14 exact `.factory/claims.json` commands from a clean clone: passed.
+- `npm test`: passed (10 Vitest and 26 Playwright tests); production build produced `dist/site/`.
+- Live light/dark Axe scans on all public routes and 404: zero serious/critical findings.
+- Live link crawl, route metadata, focus/back behavior, 44 px targets, overflow, headers, ZIP integrity, and local/live ZIP identity.
+- Prior dark-card repair: confirmed live and in code.
+
+The main release blocker is that the 390 px demo first screen contains no actual sample record. Three registered claims also use the marketing demo where the copy promises packaged-extension behavior. Remaining work is listed exactly in `.factory/review-1.md`; no fix was authorized in this review.
+
+---
+
+# Earlier repair handoff — Bookmark Freshness Review
 
 ## Independent verification 5 — PASS
 
