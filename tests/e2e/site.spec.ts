@@ -257,6 +257,8 @@ test('static 404 keeps the site skeleton and complete metadata', async ({ page }
   await expect(page.locator('footer').getByText('Built by Param Factory')).toBeVisible();
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
   await expect(page.locator('meta[property="og:image"]')).toHaveCount(1);
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual([]);
 });
 
 test('mobile demo stays within the viewport and keyboard focus is visible', async ({ page }) => {
