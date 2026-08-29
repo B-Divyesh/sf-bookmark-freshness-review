@@ -1,1 +1,1 @@
-Review old bookmarks, check selected links, and export a clean local archive.
+Review saved links, separate check results, and export a clean archive from a local browser extension.

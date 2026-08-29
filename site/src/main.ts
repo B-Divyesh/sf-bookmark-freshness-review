@@ -1,6 +1,6 @@
 import './style.css';
 import { exportBookmarkHtml } from '../../src/core/bookmarks';
-import { LICENSE_KEY, verifyLicense, type LicenseCache } from '../../src/core/license';
+import { hasVerifiedLicense, LICENSE_KEY, verifiedLicense, verifyLicense, type LicenseCache } from '../../src/core/license';
 import { sampleBookmarks } from '../../src/core/sample';
 import type { BookmarkRecord, LinkState } from '../../src/core/types';
 
@@ -10,15 +10,16 @@ const DEMO_KEY = 'demo:bookmark-freshness-review:v1';
 const build = '2026.08.29';
 let demoRecords: BookmarkRecord[] = loadDemo();
 let demoFilter: 'all' | LinkState | 'duplicates' = 'all';
-let license = loadLicense();
+let license = isDemoRoute() ? null : loadLicense();
+let licenseMessage = '';
 
 void captureLicense();
 renderRoute();
 
 function renderRoute() {
   const path = location.pathname.replace(/\/$/, '') || '/';
-  if (path === '/') renderPage(homePage(), { title: 'Bookmark Freshness Review — Review bookmarks', description: 'Review old bookmarks, run link checks when you choose, and export a local bookmark archive.', path: '/' });
-  else if (path === '/demo') renderPage(demoPage(), { title: 'Demo — Bookmark Freshness Review', description: 'Try a separate sample bookmark archive. Changes stay in this browser demo.', path: '/demo' });
+  if (isDemoRoute()) renderPage(demoPage(), { title: 'Demo — Bookmark Freshness Review', description: 'Try a separate sample bookmark archive. Changes stay in this browser demo.', path: '/demo' });
+  else if (path === '/') renderPage(homePage(), { title: 'Bookmark Freshness Review — Review bookmarks', description: 'Review old bookmarks, run link checks when you choose, and export a local bookmark archive.', path: '/' });
   else if (path === '/privacy') renderPage(privacyPage(), { title: 'Privacy — Bookmark Freshness Review', description: 'Learn what Bookmark Freshness Review stores and when a selected link check makes a request.', path: '/privacy' });
   else if (path === '/terms') renderPage(termsPage(), { title: 'Terms — Bookmark Freshness Review', description: 'Read the terms for using Bookmark Freshness Review and checking links you may access.', path: '/terms' });
   else renderPage(notFoundPage(), { title: 'Page not found — Bookmark Freshness Review', description: 'This Bookmark Freshness Review page was not found. Return home to review bookmarks.', path });
@@ -40,7 +41,7 @@ function renderPage(main: string, meta: RouteMeta) {
 }
 
 function header() {
-  return `<header class="site-header"><a class="wordmark route-link" href="/" aria-label="Bookmark Freshness Review home"><span class="plot-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Bookmark<br>Freshness Review</span></a><nav aria-label="Main navigation"><a class="route-link" href="/demo">Demo</a><a class="route-link" href="/#how">How it works</a><a class="route-link" href="/privacy">Privacy</a></nav></header>`;
+  return `<header class="site-header"><a class="wordmark route-link" href="/" aria-label="Bookmark Freshness Review home"><span class="plot-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>Bookmark<br>Freshness Review</span></a><nav aria-label="Main navigation"><a class="route-link" href="/?demo=1">Demo</a><a class="route-link" href="/#how">How it works</a><a class="route-link" href="/privacy">Privacy</a></nav></header>`;
 }
 
 function footer() {
@@ -50,15 +51,15 @@ function footer() {
 function homePage() {
   return `<section class="hero">
     <div class="hero-copy"><p class="eyebrow">A local browser extension</p><h1 tabindex="-1">Review and clean up old bookmarks</h1><p class="lede">For researchers with years of saved links who need clear keep, repair, or archive choices.</p>
-      <div class="hero-action"><a class="button primary route-link" href="/demo">Try it with sample data</a><span>Open a checked sample archive. Your archive stays separate.</span></div><a id="download" class="download-link" href="/downloads/bookmark-freshness-review.zip" download>Download the Chrome extension <span>ZIP · v1.0</span></a>
+      <div class="hero-action"><a class="button primary route-link" href="/?demo=1">Try it with sample data</a><span>Open a checked sample archive. Your archive stays separate.</span></div><a id="download" class="download-link" href="/downloads/bookmark-freshness-review.zip" download>Download the Chrome extension <span>ZIP · v1.0</span></a>
       <ul class="plain-facts"><li>Archive data stays in your browser.</li><li>Checks start only when you ask.</li><li>Standard HTML export is always free.</li></ul>
     </div>
     <figure class="hero-art"><picture><source media="(max-width: 720px)" srcset="/assets/hero-concrete-moss-720.webp"><img src="/assets/hero-concrete-moss-1280.webp" width="1280" height="853" alt="A concrete archive drawer with paper slips and moss, showing an old collection being carefully reviewed." fetchpriority="high"></picture><figcaption>Choose whether to keep, repair, or archive each bookmark.</figcaption></figure>
   </section>
-  <section class="live-preview" aria-labelledby="preview-title"><div class="section-tag">01 · Bookmark review preview</div><div class="preview-heading"><div><h2 id="preview-title">See bookmarks that need a decision</h2><p>See saved year, link result, duplicate status, and a note for each bookmark.</p></div><a class="text-link route-link" href="/demo">Open the working demo →</a></div>${previewLedger()}</section>
-  <section id="how" class="how" aria-labelledby="how-title"><div class="section-tag">02 · How bookmark review works</div><h2 id="how-title" tabindex="-1">Review bookmarks in three steps</h2><ol><li><span>1</span><div><h3>Import bookmark HTML</h3><p>Choose a standard browser bookmark HTML file.</p></div></li><li><span>2</span><div><h3>Check and add context</h3><p>Start a link check. Note the purpose, profile, or login each link needs.</p></div></li><li><span>3</span><div><h3>Keep, repair, or archive</h3><p>Fix moved URLs, choose a decision, then export standard HTML.</p></div></li></ol></section>
-  <section class="privacy-block" aria-labelledby="boundary-title"><div class="section-tag">03 · Where bookmark data goes</div><div><h2 id="boundary-title">Your bookmarks stay in browser storage</h2><p>The extension stores bookmarks, notes, and decisions in browser storage. The product has no cloud archive.</p><a class="text-link route-link" href="/privacy">Read the privacy details →</a></div><aside><h3>It does not</h3><ul><li>Upload an archive</li><li>Guess why you saved a link</li><li>Lock export behind payment</li></ul></aside></section>
-  <section class="paid" aria-labelledby="paid-title"><div><p class="eyebrow">One-time license</p><h2 id="paid-title">Review a larger archive for $18</h2><p>Free use includes 50 link-check attempts. One payment removes that limit on this browser.</p></div><div class="purchase-slab"><strong>$18</strong><span>once</span><p class="purchase-paused" role="status">Purchases are paused while checkout is unavailable.</p><button class="button secondary" data-action="paste-license">Restore a license</button><small>Existing licenses still work. <a class="route-link" href="/terms">Read the terms.</a></small>${license?.valid ? '<p class="license-ok" role="status">Full review is active on this browser.</p>' : ''}</div></section>`;
+  <section class="live-preview" aria-labelledby="preview-title"><div class="section-tag">01 · Bookmark review preview</div><div class="preview-heading"><div><h2 id="preview-title">See bookmarks that need a decision</h2><p>See saved year, link result, duplicate status, and a note for each bookmark.</p></div><a class="text-link route-link" href="/?demo=1">Open the working demo →</a></div>${previewLedger()}</section>
+  <section id="how" class="how" aria-labelledby="how-title"><div class="section-tag">02 · How bookmark review works</div><h2 id="how-title" tabindex="-1">Review bookmarks in three steps</h2><ol><li><span>1</span><div><h3>Import bookmark HTML</h3><p>Choose a standard browser bookmark HTML file.</p></div></li><li><span>2</span><div><h3>Check links and add notes</h3><p>Start a link check. Note the purpose, profile, or login each link needs.</p></div></li><li><span>3</span><div><h3>Keep, repair, or archive</h3><p>Fix moved URLs, choose a decision, then export standard HTML.</p></div></li></ol></section>
+  <section class="privacy-block" aria-labelledby="boundary-title"><div class="section-tag">03 · Where bookmark data goes</div><div><h2 id="boundary-title">Your bookmarks stay in browser storage</h2><p>The extension stores bookmarks, notes, and decisions in browser storage. The product has no cloud archive.</p><a class="text-link route-link" href="/privacy">Read the privacy details →</a></div><aside><h3>What the extension does not do</h3><ul><li>Upload an archive</li><li>Guess why you saved a link</li><li>Lock export behind payment</li></ul></aside></section>
+  <section class="paid" aria-labelledby="paid-title"><div><p class="eyebrow">One-time license</p><h2 id="paid-title">Remove the 50-check limit for $18</h2><p>Free use includes 50 link-check attempts. One payment removes that limit on this browser.</p></div><div class="purchase-slab"><strong>$18</strong><span>once</span><p class="purchase-paused" role="status">Purchases are paused while checkout is unavailable.</p><button class="button secondary" data-action="paste-license">Restore a license</button><small>Existing licenses still work. <a class="route-link" href="/terms">Read the terms.</a></small>${hasVerifiedLicense(license) ? '<p class="license-ok" role="status">Full review is active on this browser.</p>' : ''}${licenseMessage ? `<p class="license-message" role="status">${escapeHtml(licenseMessage)}</p>` : ''}</div></section>`;
 }
 
 function previewLedger() {
@@ -69,7 +70,7 @@ function previewLedger() {
 function demoPage() {
   const visible = demoRecords.filter(record => demoFilter === 'all' ? true : demoFilter === 'duplicates' ? Boolean(record.duplicateOf) : record.state === demoFilter);
   return `<section class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span><button data-action="reset-demo">Reset demo</button><button data-action="start-real">Download extension and exit demo</button></span></section>
-  <section class="demo-head"><p class="eyebrow">Sample bookmark archive</p><h1 tabindex="-1">Decide what still belongs</h1><p>Change a note or decision. Demo changes use a separate sandbox.</p><div><button class="button primary" data-action="sample-check">Run sample check</button><button class="button" data-action="export-demo">Export kept HTML</button></div></section>
+  <section class="demo-head"><p class="eyebrow">Sample bookmark archive</p><h1 tabindex="-1">Decide which bookmarks to keep</h1><p>Change a note or decision. Demo changes use a separate sandbox.</p><div><button class="button primary" data-action="sample-check">Run sample check</button><button class="button" data-action="export-demo">Export kept HTML</button></div></section>
   <section class="demo-priority" aria-label="Sample bookmark shown first on small screens">${demoRecord(visible[0] ?? demoRecords[0])}</section>
   <section class="demo-workspace" aria-label="Sample bookmark review"><aside><h2>Review groups</h2>${demoFilterButton('all', 'All')}${demoFilterButton('dead', 'Dead pages')}${demoFilterButton('failed', 'Failed checks')}${demoFilterButton('restricted', 'Login or restricted')}${demoFilterButton('redirected', 'Moved or changed')}${demoFilterButton('duplicates', 'Duplicates')}</aside><div class="demo-ledger"><div class="demo-ledger-head"><h2 tabindex="-1">${demoFilter === 'all' ? 'All bookmarks' : demoFilter === 'duplicates' ? 'Duplicates' : statusText(demoFilter)}</h2><span>${visible.length} shown</span></div>${visible.length ? visible.map(demoRecord).join('') : '<div class="empty-demo"><h3>No bookmarks in this group</h3><p>Choose another group to see sample bookmarks.</p></div>'}</div></section>`;
 }
@@ -96,7 +97,7 @@ function notFoundPage() {
 }
 
 function bind() {
-  root.querySelectorAll<HTMLAnchorElement>('a.route-link').forEach(link => link.addEventListener('click', event => { if (!isPlainClick(event)) return; event.preventDefault(); const url = new URL(link.href); navigate(`${url.pathname}${url.hash}`); }));
+  root.querySelectorAll<HTMLAnchorElement>('a.route-link').forEach(link => link.addEventListener('click', event => { if (!isPlainClick(event)) return; event.preventDefault(); const url = new URL(link.href); navigate(`${url.pathname}${url.search}${url.hash}`); }));
   root.querySelectorAll<HTMLButtonElement>('[data-demo-filter]').forEach(button => button.addEventListener('click', () => { demoFilter = button.dataset.demoFilter as typeof demoFilter; renderRoute(); root.querySelector<HTMLElement>('.demo-ledger h2')?.focus(); }));
   root.querySelectorAll<HTMLTextAreaElement>('[data-demo-note]').forEach(area => area.addEventListener('change', () => changeDemo(area.dataset.demoNote!, { note: area.value })));
   root.querySelectorAll<HTMLInputElement>('[data-demo-url]').forEach(input => input.addEventListener('change', () => changeDemo(input.dataset.demoUrl!, { url: input.value, state: 'unchecked', statusCode: undefined, error: undefined, finalUrl: undefined, canonicalUrl: undefined })));
@@ -121,23 +122,53 @@ async function onAction(event: Event) {
 
 function changeDemo(id: string, changes: Partial<BookmarkRecord>) { demoRecords = demoRecords.map(r => r.id === id ? { ...r, ...changes } : r); localStorage.setItem(DEMO_KEY, JSON.stringify(demoRecords)); renderRoute(); announce('Demo bookmark updated.'); }
 function loadDemo(): BookmarkRecord[] { try { return JSON.parse(localStorage.getItem(DEMO_KEY) || 'null') || structuredClone(sampleBookmarks); } catch { return structuredClone(sampleBookmarks); } }
-function loadLicense(): LicenseCache | null { try { return JSON.parse(localStorage.getItem(LICENSE_KEY) || 'null'); } catch { return null; } }
+function loadLicense(): LicenseCache | null {
+  try {
+    const cached = JSON.parse(localStorage.getItem(LICENSE_KEY) || 'null') as LicenseCache | null;
+    if (cached && cached.verified !== true) localStorage.removeItem(LICENSE_KEY);
+    return cached?.verified === true ? cached : null;
+  } catch { return null; }
+}
 
 async function captureLicense() {
   const token = new URLSearchParams(location.search).get('license');
   if (!token) return;
-  license = { token, valid: true, checkedAt: 0 }; localStorage.setItem(LICENSE_KEY, JSON.stringify(license)); history.replaceState({}, '', location.pathname); renderRoute();
-  try { license = { token, valid: await verifyLicense(token), checkedAt: Date.now() }; localStorage.setItem(LICENSE_KEY, JSON.stringify(license)); renderRoute(); } catch { /* Optimistic cached access stays available until the next check. */ }
+  if (isDemoRoute()) {
+    const clean = new URL(location.href);
+    clean.searchParams.delete('license');
+    history.replaceState({}, '', `${clean.pathname}${clean.search}`);
+    return;
+  }
+  history.replaceState({}, '', location.pathname);
+  licenseMessage = 'Checking license…'; renderRoute();
+  try {
+    license = verifiedLicense(token, await verifyLicense(token));
+    localStorage.setItem(LICENSE_KEY, JSON.stringify(license));
+    licenseMessage = license.valid ? '' : 'This license is not active. The 50-check limit still applies.';
+    renderRoute(); announce(license.valid ? 'Full review activated.' : licenseMessage);
+  } catch {
+    licenseMessage = 'The license could not be checked. The 50-check limit still applies. Try again when you are online.';
+    renderRoute(); announce(licenseMessage);
+  }
 }
 
 async function pasteLicense() {
   const token = prompt('Paste your Bookmark Freshness Review license:')?.trim(); if (!token) return;
-  try { license = { token, valid: await verifyLicense(token), checkedAt: Date.now() }; localStorage.setItem(LICENSE_KEY, JSON.stringify(license)); renderRoute(); announce(license.valid ? 'Full review activated.' : 'This license is not active.'); } catch { announce('The license could not be checked. Try again when you are online.'); }
+  licenseMessage = 'Checking license…'; renderRoute();
+  try {
+    license = verifiedLicense(token, await verifyLicense(token)); localStorage.setItem(LICENSE_KEY, JSON.stringify(license));
+    licenseMessage = license.valid ? '' : 'This license is not active. The 50-check limit still applies.';
+    renderRoute(); announce(license.valid ? 'Full review activated.' : licenseMessage);
+  } catch {
+    licenseMessage = 'The license could not be checked. The 50-check limit still applies. Try again when you are online.';
+    renderRoute(); announce(licenseMessage);
+  }
 }
 
 function download(content: string) { const url = URL.createObjectURL(new Blob([content], { type: 'text/html;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = 'reviewed-bookmarks.html'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 500); }
 function downloadExtension() { const a = document.createElement('a'); a.href = '/downloads/bookmark-freshness-review.zip'; a.download = 'bookmark-freshness-review.zip'; document.body.append(a); a.click(); a.remove(); }
 function navigate(destination: string) { history.pushState({}, '', destination); renderRoute(); focusRouteDestination(); }
+function isDemoRoute() { return location.pathname.replace(/\/$/, '') === '/demo' || (location.pathname === '/' && new URLSearchParams(location.search).get('demo') === '1'); }
 function focusRouteDestination() {
   requestAnimationFrame(() => {
     const target = location.hash === '#how' ? root.querySelector<HTMLElement>('#how-title') : location.hash ? root.querySelector<HTMLElement>(location.hash) : root.querySelector<HTMLElement>('h1');

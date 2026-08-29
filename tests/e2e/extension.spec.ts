@@ -5,6 +5,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
+const REAL_LICENSE_KEY = 'sb_license:bookmark-freshness-review';
+const DEMO_LICENSE_KEY = 'demo:sb_license:bookmark-freshness-review';
+
 const importFixture = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <DL><p><DT><H3>Research</H3><DL><p>
 <DT><A HREF="https://example.test/paper?utm_source=mail" ADD_DATE="1500000000">Tracked paper</A>
@@ -31,6 +34,60 @@ async function openExtension(userDataPrefix: string, path = '/options.html?demo=
   return { context, page, userDataDir };
 }
 
+test('@claim:local-demo keeps website and extension demo changes separate from real data', async ({ page: sitePage }) => {
+  const external: string[] = [];
+  sitePage.on('request', request => { if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') external.push(request.url()); });
+  await sitePage.goto('/');
+  await sitePage.evaluate(() => localStorage.setItem('archive:v1', 'REAL ARCHIVE SENTINEL'));
+  await sitePage.goto('/demo');
+  const demoLedger = sitePage.locator('.demo-ledger');
+  await demoLedger.getByLabel('Purpose or browser profile').first().fill('Needs the work profile.');
+  await demoLedger.getByLabel('Purpose or browser profile').first().blur();
+  await sitePage.getByRole('button', { name: 'Reset demo' }).click();
+  await sitePage.getByRole('button', { name: 'Download extension and exit demo' }).click();
+  expect(await sitePage.evaluate(() => localStorage.getItem('archive:v1'))).toBe('REAL ARCHIVE SENTINEL');
+  expect(await sitePage.evaluate(() => localStorage.getItem('demo:bookmark-freshness-review:v1'))).toBeNull();
+  expect(external).toEqual([]);
+
+  const { context, page, userDataDir } = await openExtension('bookmark-review-demo-isolation-');
+  const realArchive = [{
+    id: 'real-sentinel', title: 'Real archive sentinel', url: 'https://real.example.test', folder: 'Real archive', note: 'Do not change', decision: 'keep', state: 'unchecked'
+  }];
+  const realLicense = { token: 'real-license-sentinel', valid: true, checkedAt: Date.now(), verified: true };
+  try {
+    await context.route('https://api.sociobot.in/**', route => route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } }));
+    await page.evaluate(async ({ archive, license, licenseKey }) => chrome.storage.local.set({ 'archive:v1': archive, [licenseKey]: license }), { archive: realArchive, license: realLicense, licenseKey: REAL_LICENSE_KEY });
+
+    page.once('dialog', dialog => dialog.accept('demo-entered-license'));
+    await page.getByRole('button', { name: 'Paste a license' }).click();
+    await expect(page.getByText('Full review active')).toBeVisible();
+    let stored = await page.evaluate(async () => chrome.storage.local.get(null));
+    expect(stored[REAL_LICENSE_KEY]).toEqual(realLicense);
+    expect(stored[DEMO_LICENSE_KEY]).toMatchObject({ token: 'demo-entered-license', valid: true, verified: true });
+
+    await page.getByRole('button', { name: 'Reset demo' }).click();
+    stored = await page.evaluate(async () => chrome.storage.local.get(null));
+    expect(stored[REAL_LICENSE_KEY]).toEqual(realLicense);
+    expect(stored['archive:v1']).toEqual(realArchive);
+    expect(stored[DEMO_LICENSE_KEY]).toBeUndefined();
+    expect(stored['demo:archive:v1']).toBeUndefined();
+
+    page.once('dialog', dialog => dialog.accept('second-demo-license'));
+    await page.getByRole('button', { name: 'Paste a license' }).click();
+    await expect(page.getByText('Full review active')).toBeVisible();
+    await page.getByRole('button', { name: 'Exit demo' }).click();
+    await expect(page).toHaveURL(/options\.html$/);
+    stored = await page.evaluate(async () => chrome.storage.local.get(null));
+    expect(stored[REAL_LICENSE_KEY]).toEqual(realLicense);
+    expect(stored['archive:v1']).toEqual(realArchive);
+    expect(stored[DEMO_LICENSE_KEY]).toBeUndefined();
+    expect(stored['demo:archive:v1']).toBeUndefined();
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
 test('@claim:extension-local-storage imports and edits an archive without a hosted request', async () => {
   test.setTimeout(45_000);
   const userDataDir = mkdtempSync(resolve(tmpdir(), 'bookmark-review-extension-'));
@@ -45,6 +102,7 @@ test('@claim:extension-local-storage imports and edits an archive without a host
     const external: string[] = [];
     context.on('request', request => { if (new URL(request.url()).protocol !== 'chrome-extension:') external.push(request.url()); });
     await page.goto(`chrome-extension://${extensionId}/options.html?demo=1`);
+    await expect(page.getByRole('heading', { name: 'Link-check limit' })).toBeVisible();
     await page.getByRole('button', { name: 'Exit demo' }).click();
     await expect(page).toHaveURL(`chrome-extension://${extensionId}/options.html`);
     await page.locator('#import-file').setInputFiles({
@@ -239,21 +297,10 @@ test('@claim:request-spacing spaces demo requests and honors 429 and 503 Retry-A
   }
 });
 
-test('@claim:paid-license enforces 50 attempts and removes the limit for a valid license', async () => {
-  test.setTimeout(45_000);
-  const userDataDir = mkdtempSync(resolve(tmpdir(), 'bookmark-review-limit-'));
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
-    args: ['--headless=new', `--disable-extensions-except=${resolve('.output/chrome-mv3')}`, `--load-extension=${resolve('.output/chrome-mv3')}`]
-  });
-  try {
-    await context.route('https://api.sociobot.in/**', route => route.fulfill({
-      json: { valid: true, reason: 'ok', expires_at: null }
-    }));
-    const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
-    const extensionId = new URL(worker.url()).host;
-    const page = await context.newPage();
-    await page.goto(`chrome-extension://${extensionId}/options.html?demo=1`);
+test('@claim:paid-license keeps invalid and unreachable licenses capped and removes the limit only after valid verification', async () => {
+  test.setTimeout(70_000);
+  async function verifyBoundary(mode: 'valid' | 'invalid' | 'unreachable') {
+    const { context, page, userDataDir } = await openExtension(`bookmark-review-limit-${mode}-`);
     const records = Array.from({ length: 51 }, (_, index) => ({
       id: `limit-${index}`,
       title: `Bookmark ${index + 1}`,
@@ -261,39 +308,44 @@ test('@claim:paid-license enforces 50 attempts and removes the limit for a valid
       folder: 'Limit fixture',
       note: '',
       decision: 'review',
-      state: 'unchecked'
+      state: index < 50 ? 'failed' : 'unchecked',
+      checkAttempts: index < 50 ? 1 : 0
     }));
-    await page.evaluate(async seeded => chrome.storage.local.set({ 'demo:archive:v1': seeded }), records);
-    await page.reload();
+    try {
+      await context.route('https://api.sociobot.in/**', route => mode === 'unreachable'
+        ? route.abort()
+        : route.fulfill({ json: { valid: mode === 'valid', reason: mode === 'valid' ? 'ok' : 'invalid', expires_at: null } }));
+      await page.evaluate(async seeded => chrome.storage.local.set({ 'demo:archive:v1': seeded }), records);
+      await page.goto(`${page.url()}&license=${mode}-license`);
+      if (mode === 'valid') await expect(page.getByText('Full review active')).toBeVisible();
+      else await expect(page.locator('.license-message')).toContainText(mode === 'invalid' ? 'This license is not active. The 50-check limit still applies.' : 'The license could not be checked. The 50-check limit still applies.');
 
-    await page.getByRole('button', { name: 'Check visible links' }).click();
-    await expect(page.getByText('50 of 50 free link checks used. A one-time license removes the limit.')).toBeVisible({ timeout: 30_000 });
-    await expect.poll(async () => page.evaluate(async () => {
-      const stored = await chrome.storage.local.get('demo:archive:v1');
-      return (stored['demo:archive:v1'] as Array<{ checkAttempts?: number }>).reduce((total, record) => total + (record.checkAttempts ?? 0), 0);
-    })).toBe(50);
-
-    await page.getByRole('button', { name: 'Check visible links' }).click();
-    await expect.poll(async () => page.evaluate(async () => {
-      const stored = await chrome.storage.local.get('demo:archive:v1');
-      return (stored['demo:archive:v1'] as Array<{ checkAttempts?: number }>).reduce((total, record) => total + (record.checkAttempts ?? 0), 0);
-    })).toBe(50);
-
-    await page.goto(`chrome-extension://${extensionId}/options.html?demo=1&license=test-license`);
-    await expect(page.getByText('Full review active')).toBeVisible();
-    await expect.poll(async () => page.evaluate(async () => {
-      const stored = await chrome.storage.local.get('sb_license:bookmark-freshness-review');
-      return (stored['sb_license:bookmark-freshness-review'] as { checkedAt: number }).checkedAt;
-    })).toBeGreaterThan(0);
-    await page.getByRole('button', { name: 'Check visible links' }).click();
-    await expect.poll(async () => page.evaluate(async () => {
-      const stored = await chrome.storage.local.get('demo:archive:v1');
-      return (stored['demo:archive:v1'] as Array<{ checkAttempts?: number }>).reduce((total, record) => total + (record.checkAttempts ?? 0), 0);
-    })).toBe(101);
-  } finally {
-    await context.close();
-    rmSync(userDataDir, { recursive: true, force: true });
+      await page.getByRole('button', { name: 'Check visible links' }).click();
+      const expectedAttempts = mode === 'valid' ? 101 : 50;
+      await expect.poll(async () => page.evaluate(async () => {
+        const stored = await chrome.storage.local.get('demo:archive:v1');
+        return (stored['demo:archive:v1'] as Array<{ checkAttempts?: number }>).reduce((total, record) => total + (record.checkAttempts ?? 0), 0);
+      })).toBe(expectedAttempts);
+      await page.reload();
+      await page.getByRole('button', { name: 'Check visible links' }).click();
+      await expect.poll(async () => page.evaluate(async () => {
+        const stored = await chrome.storage.local.get('demo:archive:v1');
+        return (stored['demo:archive:v1'] as Array<{ checkAttempts?: number }>).reduce((total, record) => total + (record.checkAttempts ?? 0), 0);
+      })).toBe(mode === 'valid' ? 152 : 50);
+      const stored = await page.evaluate(async () => chrome.storage.local.get(null));
+      expect(stored[REAL_LICENSE_KEY]).toBeUndefined();
+      if (mode === 'valid') expect(stored[DEMO_LICENSE_KEY]).toMatchObject({ valid: true, verified: true });
+      if (mode === 'invalid') expect(stored[DEMO_LICENSE_KEY]).toMatchObject({ valid: false, verified: true });
+      if (mode === 'unreachable') expect(stored[DEMO_LICENSE_KEY]).toBeUndefined();
+    } finally {
+      await context.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
   }
+
+  await verifyBoundary('invalid');
+  await verifyBoundary('unreachable');
+  await verifyBoundary('valid');
 });
 
 test('@claim:html-export exports every kept bookmark without a license after the 50-check limit', async () => {

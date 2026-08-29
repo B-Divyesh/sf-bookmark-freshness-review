@@ -1,13 +1,14 @@
 import './style.css';
 import { applyCheck, exportBookmarkHtml, isOlderThanTwoYears, markDuplicates, parseBookmarkHtml } from '../../src/core/bookmarks';
 import { checkAllowance, FREE_CHECK_LIMIT, usedCheckAttempts } from '../../src/core/check-limit';
-import { LICENSE_KEY, verifyLicense, type LicenseCache } from '../../src/core/license';
+import { DEMO_LICENSE_KEY, hasVerifiedLicense, LICENSE_KEY, verifiedLicense, verifyLicense, type LicenseCache } from '../../src/core/license';
 import { sampleBookmarks } from '../../src/core/sample';
 import type { BookmarkRecord, LinkState } from '../../src/core/types';
 
 const STORAGE_KEY = 'archive:v1';
 const DEMO_KEY = 'demo:archive:v1';
 const demo = new URLSearchParams(location.search).get('demo') === '1';
+const licenseStorageKey = demo ? DEMO_LICENSE_KEY : LICENSE_KEY;
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const announcer = document.querySelector<HTMLDivElement>('#announcer')!;
 
@@ -16,21 +17,22 @@ let records: BookmarkRecord[] = [];
 let filter: Filter = 'all';
 let checking = false;
 let license: LicenseCache | null = null;
+let licenseMessage = '';
 let undoRecord: BookmarkRecord | null = null;
 
 void init();
 
 async function init() {
   const queryLicense = new URLSearchParams(location.search).get('license');
-  if (queryLicense) {
-    await chrome.storage.local.set({ [LICENSE_KEY]: { token: queryLicense, valid: true, checkedAt: 0 } });
-    history.replaceState({}, '', location.pathname + (demo ? '?demo=1' : ''));
-  }
-  const stored = await chrome.storage.local.get([demo ? DEMO_KEY : STORAGE_KEY, LICENSE_KEY]);
+  if (queryLicense) history.replaceState({}, '', location.pathname + (demo ? '?demo=1' : ''));
+  const stored = await chrome.storage.local.get([demo ? DEMO_KEY : STORAGE_KEY, licenseStorageKey]);
   records = (stored[demo ? DEMO_KEY : STORAGE_KEY] as BookmarkRecord[] | undefined) ?? (demo ? structuredClone(sampleBookmarks) : []);
-  license = (stored[LICENSE_KEY] as LicenseCache | undefined) ?? null;
+  const cached = stored[licenseStorageKey] as LicenseCache | undefined;
+  license = cached?.verified === true ? cached : null;
+  if (cached && cached.verified !== true) await chrome.storage.local.remove(licenseStorageKey);
   render();
-  if (license?.token && Date.now() - license.checkedAt > 86_400_000) void refreshLicense();
+  if (queryLicense) await activateLicense(queryLicense);
+  else if (license?.token && Date.now() - license.checkedAt > 86_400_000) void refreshLicense();
 }
 
 function render() {
@@ -47,7 +49,7 @@ function render() {
       <aside class="filter-rail" aria-label="Review groups">
         <h2>Review groups</h2>${filterButton('all', 'All bookmarks')}${filterButton('stale', 'Older than 2 years')}${filterButton('dead', 'Dead pages')}${filterButton('failed', 'Failed checks')}${filterButton('restricted', 'Login or restricted')}${filterButton('redirected', 'Moved or changed')}${filterButton('duplicates', 'Duplicates')}${filterButton('archive', 'Marked for archive')}
         <section class="progress-slab"><h2>Review progress</h2><strong>${progress()}%</strong><span>${records.filter(r => r.decision !== 'review').length} of ${records.length} decided</span><div><i style="width:${progress()}%"></i></div></section>
-        <section class="license-slab"><h2>${license?.valid ? 'Full review active' : 'Review larger archives'}</h2><p>${license?.valid ? 'Your license allows unlimited link checks.' : `${usedCheckAttempts(records)} of ${FREE_CHECK_LIMIT} free link checks used. A one-time license removes the limit.`}</p>${license?.valid ? '' : '<p class="purchase-paused" role="status">Purchases are paused while checkout is unavailable.</p><button data-action="license">Paste a license</button>'}</section>
+        <section class="license-slab"><h2>${hasVerifiedLicense(license) ? 'Full review active' : 'Link-check limit'}</h2><p>${hasVerifiedLicense(license) ? 'Your verified license allows unlimited link checks.' : `${usedCheckAttempts(records)} of ${FREE_CHECK_LIMIT} free link checks used. A one-time license removes the limit.`}</p>${hasVerifiedLicense(license) ? '' : `<p class="purchase-paused" role="status">Purchases are paused while checkout is unavailable.</p><button data-action="license">Paste a license</button>${licenseMessage ? `<p class="license-message" role="status">${escapeHtml(licenseMessage)}</p>` : ''}`}</section>
       </aside>
       <section class="ledger" aria-labelledby="ledger-title">
         <div class="ledger-head"><div><p class="eyebrow">Current group</p><h2 id="ledger-title" tabindex="-1">${filterLabel(filter)}</h2></div><span>${shown.length} shown</span></div>
@@ -83,8 +85,8 @@ async function onAction(event: Event) {
   if (action === 'sample') { location.href = `${location.pathname}?demo=1`; }
   if (action === 'check') await checkVisible();
   if (action === 'export') downloadExport();
-  if (action === 'reset-demo') { records = structuredClone(sampleBookmarks); await chrome.storage.local.remove(DEMO_KEY); render(); announce('Demo reset.'); }
-  if (action === 'start-real') { await chrome.storage.local.remove(DEMO_KEY); location.href = location.pathname; }
+  if (action === 'reset-demo') { records = structuredClone(sampleBookmarks); license = null; licenseMessage = ''; await chrome.storage.local.remove([DEMO_KEY, DEMO_LICENSE_KEY]); render(); announce('Demo reset.'); }
+  if (action === 'start-real') { await chrome.storage.local.remove([DEMO_KEY, DEMO_LICENSE_KEY]); location.href = location.pathname; }
   if (action === 'license') await pasteLicense();
   if (action === 'undo' && undoRecord) { const id = undoRecord.id; undoRecord = null; await updateRecord(id, { decision: 'review' }); }
 }
@@ -107,7 +109,7 @@ async function checkVisible() {
   if (!navigator.onLine) { announce('You are offline. Reconnect before checking links.'); return; }
   checking = true; render();
   const visible = filteredRecords().filter(record => record.state === 'unchecked' || record.state === 'failed');
-  const allowance = checkAllowance(records, license?.valid === true);
+  const allowance = checkAllowance(records, hasVerifiedLicense(license));
   const pending = visible.slice(0, allowance);
   let completed = 0;
   for (const record of pending) {
@@ -174,14 +176,29 @@ function downloadExport() {
 async function pasteLicense() {
   const token = prompt('Paste your Bookmark Freshness Review license:')?.trim();
   if (!token) return;
+  await activateLicense(token);
+}
+
+async function activateLicense(token: string) {
+  licenseMessage = 'Checking license…';
+  render();
   try {
-    const valid = await verifyLicense(token); license = { token, valid, checkedAt: Date.now() }; await chrome.storage.local.set({ [LICENSE_KEY]: license }); render(); announce(valid ? 'Full review activated.' : 'This license is not active.');
-  } catch { announce('The license could not be checked. Try again when you are online.'); }
+    const valid = await verifyLicense(token);
+    license = verifiedLicense(token, valid);
+    await chrome.storage.local.set({ [licenseStorageKey]: license });
+    licenseMessage = valid ? '' : 'This license is not active. The 50-check limit still applies.';
+    render();
+    announce(valid ? 'Full review activated.' : licenseMessage);
+  } catch {
+    licenseMessage = 'The license could not be checked. The 50-check limit still applies. Try again when you are online.';
+    render();
+    announce(licenseMessage);
+  }
 }
 
 async function refreshLicense() {
   if (!license) return;
-  try { license = { ...license, valid: await verifyLicense(license.token), checkedAt: Date.now() }; await chrome.storage.local.set({ [LICENSE_KEY]: license }); render(); } catch { /* Cached state keeps first paint usable offline. */ }
+  try { license = verifiedLicense(license.token, await verifyLicense(license.token)); await chrome.storage.local.set({ [licenseStorageKey]: license }); render(); } catch { /* A previously verified cache keeps first paint usable offline. */ }
 }
 
 function progress() { return records.length ? Math.round(records.filter(r => r.decision !== 'review').length / records.length * 100) : 0; }

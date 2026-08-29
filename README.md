@@ -5,7 +5,7 @@ Review and clean up old bookmarks.
 Bookmark Freshness Review is a Chromium browser extension for researchers and professionals with years of saved links. It helps you keep, repair, or archive each bookmark in an imported bookmark archive.
 
 Live site: <https://bookmark-freshness-review.sociobot.in>  
-One-click demo: <https://bookmark-freshness-review.sociobot.in/demo>
+One-click demo: <https://bookmark-freshness-review.sociobot.in/?demo=1>
 
 ## What it does
 

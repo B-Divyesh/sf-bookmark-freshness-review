@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-test('@claim:local-demo demo keeps bookmark data local', async ({ page }) => {
+test('web demo keeps bookmark data local', async ({ page }) => {
   const external: string[] = [];
   page.on('request', request => { if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') external.push(request.url()); });
   await page.goto('/');
@@ -35,7 +35,24 @@ test('desktop and mobile first screens show the sample action, explanation, and 
       expect(box, await locator.textContent() ?? 'first-screen element').not.toBeNull();
       expect(box!.y + box!.height, JSON.stringify(viewport)).toBeLessThanOrEqual(viewport.height);
     }
+    await expect(page.getByRole('link', { name: 'Try it with sample data' })).toHaveAttribute('href', '/?demo=1');
   }
+});
+
+test('query demo entry opens the isolated sample with clear headings', async ({ page }) => {
+  await page.goto('/?demo=1');
+  await expect(page).toHaveTitle('Demo — Bookmark Freshness Review');
+  await expect(page.getByRole('heading', { level: 1, name: 'Decide which bookmarks to keep' })).toBeVisible();
+  await expect(page.getByText('Demo — sample data, nothing is saved')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reset demo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download extension and exit demo' })).toBeVisible();
+});
+
+test('landing headings describe their sections without surrounding copy', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Check links and add notes' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'What the extension does not do' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Remove the 50-check limit for $18' })).toBeVisible();
 });
 
 test('Start for real downloads the extension, discards demo data, and exits the sandbox', async ({ page }) => {
@@ -129,6 +146,24 @@ test('accepts a valid one-time license return', async ({ page }) => {
   await page.goto('/?license=test-license');
   await expect(page.getByText('Full review is active on this browser.')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toContain('test-license');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sb_license:bookmark-freshness-review')!).verified)).toBe(true);
+});
+
+test('site rejects invalid, unreachable, and legacy optimistic license states', async ({ page }) => {
+  await page.route('https://api.sociobot.in/**', route => route.fulfill({ json: { valid: false, reason: 'invalid', expires_at: null } }));
+  await page.goto('/?license=invalid-license');
+  await expect(page.locator('.license-message')).toHaveText('This license is not active. The 50-check limit still applies.');
+  await expect(page.getByText('Full review is active on this browser.')).toHaveCount(0);
+
+  await page.evaluate(() => localStorage.setItem('sb_license:bookmark-freshness-review', JSON.stringify({ token: 'legacy-unverified', valid: true, checkedAt: 0 })));
+  await page.reload();
+  expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toBeNull();
+  await page.unrouteAll();
+  await page.route('https://api.sociobot.in/**', route => route.abort());
+  await page.goto('/?license=unreachable-license');
+  await expect(page.locator('.license-message')).toContainText('The license could not be checked. The 50-check limit still applies.');
+  await expect(page.getByText('Full review is active on this browser.')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toBeNull();
 });
 
 test('@claim:license-token-only license verification sends only the token and no archive data', async ({ page }) => {
