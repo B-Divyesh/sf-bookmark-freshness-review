@@ -37,9 +37,9 @@ function render() {
   if (!records.length) { renderEmpty(); return; }
   const shown = filteredRecords();
   app.innerHTML = `
-    ${demo ? '<section class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span><button data-action="reset-demo">Reset demo</button><button data-action="start-real">Start for real</button></span></section>' : ''}
+    ${demo ? '<section class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span><button data-action="reset-demo">Reset demo</button><button data-action="start-real">Exit demo</button></span></section>' : ''}
     <section class="workspace-head">
-      <div><p class="eyebrow">Archive review bench</p><h1>Decide which bookmarks still belong</h1><p>${records.length} bookmarks stay on this device. Check links only when you choose.</p></div>
+      <div><p class="eyebrow">Bookmark review</p><h1>Decide which bookmarks still belong</h1><p>${records.length} bookmarks stay on this device. Check links only when you choose.</p></div>
       <div class="head-actions"><label class="file-button">Import HTML<input id="import-file" type="file" accept=".html,text/html" /></label><button class="primary" data-action="check">${checking ? 'Checking…' : 'Check visible links'}</button><button data-action="export">Export kept HTML</button></div>
     </section>
     ${!navigator.onLine ? '<p class="state-callout warning" role="status">You are offline. Notes and decisions still work. Link checks will fail until you reconnect.</p>' : ''}
@@ -143,7 +143,7 @@ function recordCard(record: BookmarkRecord): string {
     ${record.finalUrl && normalizeDisplay(record.finalUrl) !== normalizeDisplay(record.url) ? `<p class="change-note">Now resolves to ${escapeHtml(record.finalUrl)}</p>` : ''}
     ${record.duplicateOf ? '<p class="change-note">Duplicate of another bookmark in this archive.</p>' : ''}
     ${record.error ? `<p class="error-note">${escapeHtml(record.error)}</p>` : ''}
-    <label class="note-label">Purpose or browser context<textarea data-note="${record.id}" rows="2" placeholder="Why keep it? Which profile or login does it need?">${escapeHtml(record.note)}</textarea></label>
+    <label class="note-label">Purpose or browser profile<textarea data-note="${record.id}" rows="2" placeholder="Why keep it? Which profile or login does it need?">${escapeHtml(record.note)}</textarea></label>
     <div class="decision-row" aria-label="Review decision"><button data-decision="keep" data-id="${record.id}" aria-pressed="${record.decision === 'keep'}">Keep</button><button data-decision="review" data-id="${record.id}" aria-pressed="${record.decision === 'review'}">Review later</button><button data-decision="archive" data-id="${record.id}" aria-pressed="${record.decision === 'archive'}">Archive</button></div>
   </article>`;
 }

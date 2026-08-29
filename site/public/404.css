@@ -1,5 +1,6 @@
 :root { color-scheme: light dark; --ground:#e7e3d6; --slab:#f7f3e7; --ink:#182016; --moss:#365f2b; --lichen:#6c5007; --line:#30382d; font: 400 16px/1.55 system-ui, sans-serif; color:var(--ink); background:var(--ground); }
 * { box-sizing:border-box; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 body { min-width:320px; min-height:100vh; margin:0; background:var(--ground); }
 a { min-width:44px; min-height:44px; display:inline-flex; align-items:center; color:var(--ink); text-underline-offset:4px; }
 a:focus-visible { outline:3px solid var(--lichen); outline-offset:3px; }

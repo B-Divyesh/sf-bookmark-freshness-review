@@ -45,13 +45,13 @@ test('@claim:extension-local-storage imports and edits an archive without a host
     const external: string[] = [];
     context.on('request', request => { if (new URL(request.url()).protocol !== 'chrome-extension:') external.push(request.url()); });
     await page.goto(`chrome-extension://${extensionId}/options.html?demo=1`);
-    await page.getByRole('button', { name: 'Start for real' }).click();
+    await page.getByRole('button', { name: 'Exit demo' }).click();
     await expect(page).toHaveURL(`chrome-extension://${extensionId}/options.html`);
     await page.locator('#import-file').setInputFiles({
       name: 'bookmarks.html', mimeType: 'text/html', buffer: Buffer.from('<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>Research</H3><DL><p><DT><A HREF="https://example.test/paper">Paper</A></DL><p></DL><p>')
     });
     await expect(page.getByRole('heading', { name: 'Decide which bookmarks still belong' })).toBeVisible();
-    const note = page.getByLabel('Purpose or browser context');
+    const note = page.getByLabel('Purpose or browser profile');
     await note.fill('Use for the literature review.');
     await note.blur();
     await expect.poll(async () => page.evaluate(async () => await new Promise<Record<string, unknown>>(resolve => chrome.storage.local.get(null, resolve)))).toMatchObject({
@@ -85,6 +85,77 @@ test('@claim:html-import imports nested standard bookmark HTML through the packa
     for await (const chunk of stream!) exported += chunk.toString();
     expect(exported).toContain('<H3>Parent</H3>\n  <DL><p>\n    <DT><A HREF="https://example.test/parent-before">Parent before</A>\n    <DT><A HREF="https://example.test/parent-after">Parent after</A>');
     expect(exported).toContain('<H3>Child</H3>');
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('@claim:explicit-checks does not contact saved sites before the packaged extension check action', async ({}, testInfo) => {
+  const session = `explicit-${testInfo.workerIndex}-${Date.now()}`;
+  const { context, page, userDataDir } = await openExtension('bookmark-review-explicit-');
+  try {
+    await page.locator('#import-file').setInputFiles({
+      name: 'explicit-check.html', mimeType: 'text/html',
+      buffer: Buffer.from(`<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><A HREF="http://127.0.0.1:4173/__test-link/${session}/saved">Saved site</A></DL><p>`)
+    });
+    await page.waitForTimeout(700);
+    expect(await (await fetch(`http://127.0.0.1:4173/__test-log/${session}`)).json()).toEqual([]);
+    await page.getByRole('button', { name: 'Check visible links' }).click();
+    await expect.poll(async () => (await (await fetch(`http://127.0.0.1:4173/__test-log/${session}`)).json()).length).toBe(1);
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('@claim:url-repair saves a repaired URL and exports it from the packaged extension', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-repair-');
+  try {
+    await page.locator('#import-file').setInputFiles({
+      name: 'repair.html', mimeType: 'text/html',
+      buffer: Buffer.from('<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><A HREF="https://example.test/old">Moved paper</A></DL><p>')
+    });
+    const input = page.getByLabel('Bookmark URL');
+    await input.fill('https://example.test/repaired');
+    await input.blur();
+    await page.reload();
+    await expect(page.getByLabel('Bookmark URL')).toHaveValue('https://example.test/repaired');
+    expect(await page.evaluate(async () => chrome.storage.local.get('demo:archive:v1'))).toMatchObject({
+      'demo:archive:v1': [expect.objectContaining({ url: 'https://example.test/repaired' })]
+    });
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export kept HTML' }).click();
+    const download = await downloadPromise;
+    const stream = await download.createReadStream();
+    let exported = '';
+    for await (const chunk of stream!) exported += chunk.toString();
+    expect(exported).toContain('https://example.test/repaired');
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('@claim:decision-persistence keeps review decisions in extension storage and omits archived bookmarks from export', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-decisions-');
+  try {
+    await page.locator('#import-file').setInputFiles({ name: 'decisions.html', mimeType: 'text/html', buffer: Buffer.from(`<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p>
+      <DT><A HREF="https://example.test/keep">Keep item</A><DT><A HREF="https://example.test/review">Review item</A><DT><A HREF="https://example.test/archive">Archive item</A></DL><p>`) });
+    await page.getByRole('heading', { name: 'Keep item' }).locator('xpath=ancestor::article').getByRole('button', { name: 'Keep' }).click();
+    await page.getByRole('heading', { name: 'Archive item' }).locator('xpath=ancestor::article').getByRole('button', { name: 'Archive' }).click();
+    await page.reload();
+    const stored = await page.evaluate(async () => chrome.storage.local.get('demo:archive:v1'));
+    const decisions = (stored['demo:archive:v1'] as Array<{ title: string; decision: string }>).map(({ title, decision }) => ({ title, decision }));
+    expect(decisions).toEqual([{ title: 'Keep item', decision: 'keep' }, { title: 'Review item', decision: 'review' }, { title: 'Archive item', decision: 'archive' }]);
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export kept HTML' }).click();
+    const stream = await (await downloadPromise).createReadStream();
+    let exported = '';
+    for await (const chunk of stream!) exported += chunk.toString();
+    expect(exported).toContain('Keep item');
+    expect(exported).toContain('Review item');
+    expect(exported).not.toContain('Archive item');
   } finally {
     await context.close();
     rmSync(userDataDir, { recursive: true, force: true });
@@ -225,6 +296,31 @@ test('@claim:paid-license enforces 50 attempts and removes the limit for a valid
   }
 });
 
+test('@claim:html-export exports every kept bookmark without a license after the 50-check limit', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-free-export-');
+  try {
+    const records = Array.from({ length: 51 }, (_, index) => ({
+      id: `free-export-${index}`, title: `Kept bookmark ${index + 1}`, url: `https://example.test/${index + 1}`,
+      folder: 'Free export', note: '', decision: 'keep', state: 'unchecked', checkAttempts: 1
+    }));
+    await page.evaluate(async seeded => chrome.storage.local.set({ 'demo:archive:v1': seeded }), records);
+    await page.reload();
+    await expect(page.getByText('51 of 50 free link checks used. A one-time license removes the limit.')).toBeVisible();
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export kept HTML' }).click();
+    const stream = await (await downloadPromise).createReadStream();
+    let exported = '';
+    for await (const chunk of stream!) exported += chunk.toString();
+    expect(exported).toContain('<!DOCTYPE NETSCAPE-Bookmark-file-1>');
+    expect(exported).toContain('Kept bookmark 1');
+    expect(exported).toContain('Kept bookmark 51');
+    expect((exported.match(/<DT><A /g) ?? [])).toHaveLength(51);
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
 test('keeps review work available when the browser goes offline', async () => {
   const userDataDir = mkdtempSync(resolve(tmpdir(), 'bookmark-review-offline-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
@@ -238,11 +334,11 @@ test('keeps review work available when the browser goes offline', async () => {
     await page.goto(`chrome-extension://${extensionId}/options.html?demo=1`);
     await context.setOffline(true);
     await expect(page.getByText('You are offline. Notes and decisions still work.')).toBeVisible();
-    const note = page.getByLabel('Purpose or browser context').first();
+    const note = page.getByLabel('Purpose or browser profile').first();
     await note.fill('Saved while offline.');
     await note.blur();
     await page.reload();
-    await expect(page.getByLabel('Purpose or browser context').first()).toHaveValue('Saved while offline.');
+    await expect(page.getByLabel('Purpose or browser profile').first()).toHaveValue('Saved while offline.');
   } finally {
     await context.close();
     rmSync(userDataDir, { recursive: true, force: true });

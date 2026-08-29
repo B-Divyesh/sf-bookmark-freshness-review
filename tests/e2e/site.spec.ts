@@ -4,11 +4,19 @@ import AxeBuilder from '@axe-core/playwright';
 test('@claim:local-demo demo keeps bookmark data local', async ({ page }) => {
   const external: string[] = [];
   page.on('request', request => { if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') external.push(request.url()); });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('archive:v1', 'REAL ARCHIVE SENTINEL'));
   await page.goto('/demo');
-  await page.getByLabel('Purpose or browser context').first().fill('Needs the work profile.');
-  await page.getByLabel('Purpose or browser context').first().blur();
-  const keys = await page.evaluate(() => Object.keys(localStorage));
-  expect(keys).toEqual(['demo:bookmark-freshness-review:v1']);
+  const demoLedger = page.locator('.demo-ledger');
+  await demoLedger.getByLabel('Purpose or browser profile').first().fill('Needs the work profile.');
+  await demoLedger.getByLabel('Purpose or browser profile').first().blur();
+  expect(await page.evaluate(() => localStorage.getItem('archive:v1'))).toBe('REAL ARCHIVE SENTINEL');
+  expect(await page.evaluate(() => localStorage.getItem('demo:bookmark-freshness-review:v1'))).toContain('Needs the work profile.');
+  await page.getByRole('button', { name: 'Reset demo' }).click();
+  expect(await page.evaluate(() => localStorage.getItem('archive:v1'))).toBe('REAL ARCHIVE SENTINEL');
+  await page.getByRole('button', { name: 'Download extension and exit demo' }).click();
+  expect(await page.evaluate(() => localStorage.getItem('demo:bookmark-freshness-review:v1'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('archive:v1'))).toBe('REAL ARCHIVE SENTINEL');
   expect(external).toEqual([]);
 });
 
@@ -18,7 +26,7 @@ test('desktop and mobile first screens show the sample action, explanation, and 
     await page.goto('/');
     const firstScreen = [
       page.getByRole('link', { name: 'Try it with sample data' }),
-      page.getByText('See six checked bookmarks. Nothing touches your archive.'),
+      page.getByText('Open a checked sample archive. Your archive stays separate.'),
       page.locator('.plain-facts')
     ];
     for (const locator of firstScreen) {
@@ -32,10 +40,10 @@ test('desktop and mobile first screens show the sample action, explanation, and 
 
 test('Start for real downloads the extension, discards demo data, and exits the sandbox', async ({ page }) => {
   await page.goto('/demo');
-  await page.getByLabel('Purpose or browser context').first().fill('This change must be discarded.');
-  await page.getByLabel('Purpose or browser context').first().blur();
+  await page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first().fill('This change must be discarded.');
+  await page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first().blur();
   const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Start for real' }).click();
+  await page.getByRole('button', { name: 'Download extension and exit demo' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe('bookmark-freshness-review.zip');
   await expect(page).toHaveURL('/');
@@ -52,32 +60,39 @@ test('@claim:site-local-resources site loads no analytics, advertising scripts, 
   expect(external).toEqual([]);
 });
 
-test('@claim:status-separation separates dead pages from failed checks', async ({ page }) => {
+test('@claim:status-separation keeps dead, restricted, moved, and failed checks separate', async ({ page }) => {
   await page.goto('/demo');
+  const ledger = page.locator('.demo-ledger');
   await page.getByRole('button', { name: /Dead pages/ }).click();
-  await expect(page.getByText('Dead page · 404')).toBeVisible();
+  await expect(ledger.getByText('Dead page · 404')).toBeVisible();
   await page.getByRole('button', { name: /Failed checks/ }).click();
-  await expect(page.getByRole('heading', { name: 'Check failed' })).toBeVisible();
-  await expect(page.getByText('The site did not answer.')).toBeVisible();
+  await expect(ledger.getByRole('heading', { name: 'Check failed' })).toBeVisible();
+  await expect(ledger.getByText('The site did not answer.')).toBeVisible();
+  await page.getByRole('button', { name: /Login or restricted/ }).click();
+  await expect(ledger.getByRole('heading', { name: 'Login or restricted' })).toBeVisible();
+  await expect(ledger.getByText('Open in the work profile. Library login required.')).toBeVisible();
+  await page.getByRole('button', { name: /Moved or changed/ }).click();
+  await expect(ledger.getByRole('heading', { name: 'Moved or changed' })).toBeVisible();
+  await expect(ledger.getByText('Moved or changed · 200')).toBeVisible();
 });
 
-test('@claim:explicit-checks starts checks only after a button press', async ({ page }) => {
+test('sample check gives a visible completion message', async ({ page }) => {
   await page.goto('/demo');
   await expect(page.locator('#route-status')).toHaveText('');
   await page.getByRole('button', { name: 'Run sample check' }).click();
   await expect(page.locator('#route-status')).toContainText('Six sample checks finished.');
 });
 
-test('@claim:url-repair saves a repaired URL in the demo sandbox', async ({ page }) => {
+test('demo saves a repaired URL in its sandbox', async ({ page }) => {
   await page.goto('/demo');
-  const input = page.getByLabel('Bookmark URL').first();
+  const input = page.locator('.demo-ledger').getByLabel('Bookmark URL').first();
   await input.fill('https://archive.example.org/repaired');
   await input.blur();
   await page.reload();
   await expect(page.getByLabel('Bookmark URL').first()).toHaveValue('https://archive.example.org/repaired');
 });
 
-test('@claim:html-export exports kept bookmarks as standard HTML', async ({ page }) => {
+test('demo exports kept bookmarks as standard HTML', async ({ page }) => {
   await page.goto('/demo');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export kept HTML' }).click();
@@ -87,6 +102,26 @@ test('@claim:html-export exports kept bookmarks as standard HTML', async ({ page
   for await (const chunk of stream!) content += chunk.toString();
   expect(content).toContain('<!DOCTYPE NETSCAPE-Bookmark-file-1>');
   expect(content).toContain('Field Notes on Durable Web Archives');
+});
+
+test('@claim:demo-seed starts the demo with six realistic checked bookmark records', async ({ page }) => {
+  await page.goto('/demo');
+  await expect(page.locator('.demo-ledger .demo-record')).toHaveCount(6);
+  await expect(page.locator('.demo-ledger .state-alive')).toHaveCount(2);
+  await expect(page.locator('.demo-ledger .state-dead')).toHaveCount(1);
+  await expect(page.locator('.demo-ledger .state-restricted')).toHaveCount(1);
+  await expect(page.locator('.demo-ledger .state-redirected')).toHaveCount(1);
+  await expect(page.locator('.demo-ledger .state-failed')).toHaveCount(1);
+});
+
+test('@claim:bookmark-ledger shows a saved year, link result, duplicate status, and note', async ({ page }) => {
+  await page.goto('/demo');
+  const ledger = page.locator('.demo-ledger');
+  await expect(ledger.getByText(/saved 2021/).first()).toBeVisible();
+  await expect(ledger.getByText('Alive').first()).toBeVisible();
+  await page.getByRole('button', { name: /Duplicates/ }).click();
+  await expect(ledger.getByText('Duplicate of another bookmark in this sample.')).toBeVisible();
+  await expect(ledger.getByLabel('Purpose or browser profile').first()).not.toHaveValue('');
 });
 
 test('accepts a valid one-time license return', async ({ page }) => {
@@ -104,8 +139,8 @@ test('@claim:license-token-only license verification sends only the token and no
     await route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } });
   });
   await page.goto('/demo');
-  await page.getByLabel('Purpose or browser context').first().fill('PRIVATE ARCHIVE SENTINEL');
-  await page.getByLabel('Purpose or browser context').first().blur();
+  await page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first().fill('PRIVATE ARCHIVE SENTINEL');
+  await page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first().blur();
   await page.goto('/?license=privacy-test-token');
   await expect(page.getByText('Full review is active on this browser.')).toBeVisible();
   expect(requests).toHaveLength(1);
@@ -130,7 +165,7 @@ test('demo sample records do not offer placeholder links as live destinations', 
   await page.goto('/demo');
   await expect(page.getByText('Open saved page')).toHaveCount(0);
   await expect(page.locator('.demo-record a[target="_blank"]')).toHaveCount(0);
-  await expect(page.getByText('Sample address: archive.example.org').first()).toBeVisible();
+  await expect(page.locator('.demo-ledger').getByText('Sample address: archive.example.org').first()).toBeVisible();
 });
 
 test('every site control meets the 44px mobile touch-target baseline', async ({ page }) => {
@@ -162,7 +197,7 @@ test('dark treatment has no serious accessibility issues', async ({ page }) => {
   for (const route of ['/', '/demo', '/privacy', '/terms']) {
     await page.goto(route);
     if (route === '/demo') {
-      const cards = await page.locator('.demo-record').evaluateAll(elements => elements.map(element => {
+      const cards = await page.locator('.demo-ledger .demo-record').evaluateAll(elements => elements.map(element => {
         const heading = element.querySelector('h3')!;
         const foreground = getComputedStyle(heading).color;
         const background = getComputedStyle(element).backgroundColor;
@@ -198,12 +233,40 @@ test('internal links resolve and route changes focus the page heading', async ({
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
   await page.goBack();
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
+  await page.goto('/privacy');
+  await page.getByRole('link', { name: 'How it works' }).click();
+  await expect(page.getByRole('heading', { name: 'Review bookmarks in three steps' })).toBeFocused();
+  await expect(page.locator('#route-status')).toHaveText('How bookmark review works');
+});
+
+test('routes update title, description, canonical, and social metadata', async ({ page }) => {
+  await page.goto('/privacy');
+  await expect(page).toHaveTitle('Privacy — Bookmark Freshness Review');
+  expect(await page.locator('meta[name="description"]').getAttribute('content')).toContain('stores');
+  expect(await page.locator('link[rel="canonical"]').getAttribute('href')).toBe('https://bookmark-freshness-review.sociobot.in/privacy');
+  expect(await page.locator('meta[property="og:url"]').getAttribute('content')).toBe('https://bookmark-freshness-review.sociobot.in/privacy');
+  await page.getByRole('link', { name: 'Demo' }).click();
+  await expect(page).toHaveTitle('Demo — Bookmark Freshness Review');
+  expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('sample bookmark archive');
+});
+
+test('static 404 keeps the site skeleton and complete metadata', async ({ page }) => {
+  await page.goto('/404.html');
+  await expect(page).toHaveTitle('Page not found — Bookmark Freshness Review');
+  await expect(page.locator('header nav')).toBeVisible();
+  await expect(page.locator('footer').getByText('Built by Param Factory')).toBeVisible();
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
+  await expect(page.locator('meta[property="og:image"]')).toHaveCount(1);
 });
 
 test('mobile demo stays within the viewport and keyboard focus is visible', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/demo');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const firstRecord = page.locator('.demo-priority .demo-record');
+  await expect(firstRecord).toBeVisible();
+  const box = await firstRecord.boundingBox();
+  expect(box!.y + box!.height).toBeLessThanOrEqual(844);
   await page.keyboard.press('Tab');
   await expect(page.locator('.skip-link')).toBeFocused();
 });
