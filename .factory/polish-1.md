@@ -43,3 +43,5 @@ Review closed: `ed93292811324db13a2e967bf4a8c3fe76da1f80`
 | F-1-36 | Standardized link check, failed check, and moved or changed terms. | `.factory/copy-audit.md` |
 
 Local evidence before deployment: `npm test` passed (10 Vitest, 34 Playwright), all 17 claims passed through the suite, and `npm run build` wrote `dist/site/`. Post-deploy evidence and the final live URL are recorded in `.factory/handoff.md`.
+
+Live re-check: <https://bookmark-freshness-review.sociobot.in/demo> was opened cold at 390 × 844 after deployment. The persistent banner, reset/exit actions, and complete first sample record were visible; its bottom edge was 744 px. Screenshot: `.factory/polish-1-live-demo-mobile.png`. The same cold browser check covered `/`, `/privacy`, `/terms`, and an unknown route; route titles/canonicals were correct, all four main routes had zero serious/critical Axe violations, and the unknown route returned HTTP 404.
