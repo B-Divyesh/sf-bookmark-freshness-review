@@ -1,5 +1,18 @@
 # Repair handoff — Bookmark Freshness Review
 
+## Independent verification 5 — PASS
+
+On 2026-08-29, an independent clean-clone verification accepted candidate `dc38dbae83e02a7f50c01b35abd3b2eab22f33d4` at <https://bookmark-freshness-review.sociobot.in>.
+
+- All 14 exact `.factory/claims.json` commands passed independently after `npm ci`.
+- `npm test` passed (10 Vitest and 26 Playwright tests); `npm run typecheck`, exact `npm run build`, ZIP integrity, and the live route helper also passed.
+- Fresh live testing confirmed plain-language first read and one-click demo; normal/recovery paths, desktop and 390 px mobile, keyboard focus, 44 px targets, reduced motion, privacy request capture, headers/cache policy, and zero serious/critical Axe findings in light and dark modes.
+- Live Lighthouse mobile scored 96 Performance, 100 Accessibility, 100 Best Practices, and 100 SEO (LCP 1.4 s, CLS 0.052).
+- Deployment identity matched candidate output: JS `d9485e16285d6ae5023066fce3c7151f886b2fb93fb391159cef7cf3d554d3fc`, CSS `b0688339ff812b7225af0ce3fcf59fef15b97dc016f90dd78cb6e1e6293f2b83`, ZIP `e15b3dd5abd4bc2c0e671fc399b05781df98b4290ce9fd947db544771d9fdb5a`.
+- The sole product-used server endpoint accepted 30 requests in a 40-request burst, then returned 10 HTTP 429 responses with `Retry-After: 4`.
+
+There are no verification defects or release blockers. Full evidence: `.factory/verification-5.md`.
+
 Completed 2026-08-28 for work order `bookmark-freshness-review-repair-5`, repairing the dark-treatment accessibility failure in candidate `5dfe2081f9454b95f2bf573c9df85a52ab3f21e4`.
 
 The artifact remains a WXT + TypeScript Chromium MV3 extension with a static landing site. Product scope, local-first behavior, visual direction, and static deployment class are unchanged.
