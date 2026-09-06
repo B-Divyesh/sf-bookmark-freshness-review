@@ -141,52 +141,16 @@ test('@claim:bookmark-ledger shows a saved year, link result, duplicate status, 
   await expect(ledger.getByLabel('Purpose or browser profile').first()).not.toHaveValue('');
 });
 
-test('accepts a valid one-time license return', async ({ page }) => {
-  await page.route('https://api.sociobot.in/**', route => route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } }));
-  await page.goto('/?license=test-license');
-  await expect(page.getByText('Full review is active on this browser.')).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toContain('test-license');
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sb_license:bookmark-freshness-review')!).verified)).toBe(true);
-});
-
-test('site rejects invalid, unreachable, and legacy optimistic license states', async ({ page }) => {
-  await page.route('https://api.sociobot.in/**', route => route.fulfill({ json: { valid: false, reason: 'invalid', expires_at: null } }));
-  await page.goto('/?license=invalid-license');
-  await expect(page.locator('.license-message')).toHaveText('This license is not active. The 50-check limit still applies.');
-  await expect(page.getByText('Full review is active on this browser.')).toHaveCount(0);
-
-  await page.evaluate(() => localStorage.setItem('sb_license:bookmark-freshness-review', JSON.stringify({ token: 'legacy-unverified', valid: true, checkedAt: 0 })));
-  await page.reload();
-  expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toBeNull();
-  await page.unrouteAll();
-  await page.route('https://api.sociobot.in/**', route => route.abort());
-  await page.goto('/?license=unreachable-license');
-  await expect(page.locator('.license-message')).toContainText('The license could not be checked. The 50-check limit still applies.');
+test('site directs license restoration to the extension without creating a site unlock', async ({ page }) => {
+  const external: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') external.push(request.url()); });
+  await page.goto('/?license=returned-license');
+  await expect(page).toHaveURL('/');
+  await expect(page.getByText('To restore a license, paste it in the extension’s Link-check limit section.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Restore a license' })).toHaveCount(0);
   await expect(page.getByText('Full review is active on this browser.')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('sb_license:bookmark-freshness-review'))).toBeNull();
-});
-
-test('@claim:license-token-only license verification sends only the token and no archive data', async ({ page }) => {
-  const requests: Array<{ method: string; url: string; body: string | null; headers: Record<string, string> }> = [];
-  await page.route('https://api.sociobot.in/**', async route => {
-    const request = route.request();
-    requests.push({ method: request.method(), url: request.url(), body: request.postData(), headers: request.headers() });
-    await route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } });
-  });
-  await page.goto('/demo');
-  await page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first().fill('PRIVATE ARCHIVE SENTINEL');
-  await page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first().blur();
-  await page.goto('/?license=privacy-test-token');
-  await expect(page.getByText('Full review is active on this browser.')).toBeVisible();
-  expect(requests).toHaveLength(1);
-  const requestUrl = new URL(requests[0].url);
-  expect(requests[0].method).toBe('GET');
-  expect(requests[0].body).toBeNull();
-  expect(requestUrl.pathname).toBe('/api/v1/products/bookmark-freshness-review/verify');
-  expect([...requestUrl.searchParams.entries()]).toEqual([['license', 'privacy-test-token']]);
-  expect(JSON.stringify(requests[0])).not.toContain('PRIVATE ARCHIVE SENTINEL');
-  expect(requests[0].headers.authorization).toBeUndefined();
-  expect(requests[0].headers.cookie).toBeUndefined();
+  expect(external).toEqual([]);
 });
 
 test('@claim:checkout-paused does not link to checkout while product registration is unavailable', async ({ page }) => {
@@ -296,11 +260,11 @@ test('static 404 keeps the site skeleton and complete metadata', async ({ page }
   expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? ''))).toEqual([]);
 });
 
-test('mobile demo stays within the viewport and keyboard focus is visible', async ({ page }) => {
+test('mobile demo shows one ledger record within the viewport and keyboard focus is visible', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/demo');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const firstRecord = page.locator('.demo-priority .demo-record');
+  const firstRecord = page.locator('.demo-ledger .demo-record').first();
   await expect(firstRecord).toBeVisible();
   const box = await firstRecord.boundingBox();
   expect(box!.y + box!.height).toBeLessThanOrEqual(844);
@@ -318,4 +282,48 @@ test('keyboard users can operate demo filters and decisions', async ({ page }) =
   await archive.focus();
   await page.keyboard.press('Enter');
   await expect(archive).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('demo preserves keyboard focus after record edits, reset, and sample checks', async ({ page }) => {
+  await page.goto('/demo');
+  const record = page.locator('.demo-ledger .demo-record').first();
+  const archive = record.getByRole('button', { name: 'Archive' });
+  await archive.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.demo-ledger .demo-record').first().getByRole('button', { name: 'Archive' })).toBeFocused();
+
+  const note = page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first();
+  await note.focus();
+  await note.fill('A keyboard update.');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.demo-ledger').getByLabel('Purpose or browser profile').first()).toBeFocused();
+
+  const url = page.locator('.demo-ledger').getByLabel('Bookmark URL').first();
+  await url.focus();
+  await url.fill('https://archive.example.org/keyboard-update');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.demo-ledger').getByLabel('Bookmark URL').first()).toBeFocused();
+
+  const check = page.getByRole('button', { name: 'Run sample check' });
+  await check.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#route-status')).toContainText('Six sample checks finished.');
+  await expect(page.getByRole('button', { name: 'Run sample check' })).toBeFocused();
+
+  const reset = page.getByRole('button', { name: 'Reset demo' });
+  await reset.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Reset demo' })).toBeFocused();
+});
+
+test('mobile demo has an ordered heading outline and one set of record controls', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/demo');
+  const headings = await page.locator('main h1, main h2, main h3').evaluateAll(nodes => nodes.map(node => ({ level: node.tagName, text: node.textContent?.trim() })));
+  expect(headings[0]).toMatchObject({ level: 'H1', text: 'Decide which bookmarks to keep' });
+  expect(headings[1]).toMatchObject({ level: 'H2', text: 'Review groups' });
+  expect(headings.findIndex(heading => heading.level === 'H3')).toBeGreaterThan(1);
+  await expect(page.locator('[data-demo-decision="archive"][data-id="sample-1"]')).toHaveCount(1);
+  await expect(page.locator('[data-demo-note="sample-1"]')).toHaveCount(1);
+  await expect(page.locator('[data-demo-url="sample-1"]')).toHaveCount(1);
 });

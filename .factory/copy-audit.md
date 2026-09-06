@@ -1,4 +1,4 @@
-# Copy audit — polish round 2 · 2026-08-29
+# Copy audit — repair 6 · 2026-09-06
 
 Every visible landing-page copy unit and the changed demo/license states were checked against the plain-words rules. No sentence exceeds 22 words. No banned marketing word appears.
 
@@ -55,9 +55,7 @@ Every visible landing-page copy unit and the changed demo/license states were ch
 | One payment removes that limit on this browser. | 8 | Pass |
 | $18 once | 2 | Pass |
 | Purchases are paused while checkout is unavailable. | 7 | Pass |
-| Restore a license | 3 | Pass |
-| Existing licenses still work. | 4 | Pass |
-| Full review is active on this browser. | 7 | Pass |
+| To restore a license, paste it in the extension’s Link-check limit section. | 12 | Pass |
 | Read the terms. | 3 | Pass |
 | Bookmark data stays in browser extension storage. | 7 | Pass |
 | Terms | 1 | Pass |

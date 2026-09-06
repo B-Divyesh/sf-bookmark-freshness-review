@@ -35,8 +35,8 @@ async function init() {
   else if (license?.token && Date.now() - license.checkedAt > 86_400_000) void refreshLicense();
 }
 
-function render() {
-  if (!records.length) { renderEmpty(); return; }
+function render(focusSelector?: string) {
+  if (!records.length) { renderEmpty(focusSelector); return; }
   const shown = filteredRecords();
   app.innerHTML = `
     ${demo ? '<section class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span><button data-action="reset-demo">Reset demo</button><button data-action="start-real">Exit demo</button></span></section>' : ''}
@@ -58,9 +58,10 @@ function render() {
     </div>
     ${undoRecord ? `<div class="undo" role="status"><span>“${escapeHtml(undoRecord.title)}” marked for archive.</span><button data-action="undo">Undo</button></div>` : ''}`;
   bindEvents();
+  restoreFocus(focusSelector);
 }
 
-function renderEmpty() {
+function renderEmpty(focusSelector?: string) {
   app.innerHTML = `
     <section class="empty-start">
       <div><p class="eyebrow">Local archive review</p><h1>Review old bookmarks without uploading them</h1><p>For researchers with years of saved links who need a clear keep-or-archive pass.</p>
@@ -69,15 +70,16 @@ function renderEmpty() {
       <div class="empty-diagram" aria-label="A simple diagram showing imported bookmarks sorted into keep, repair, and archive groups"><span>IMPORT</span><i></i><b>KEEP</b><b>REPAIR</b><b>ARCHIVE</b></div>
     </section>`;
   bindEvents();
+  restoreFocus(focusSelector);
 }
 
 function bindEvents() {
   app.querySelector<HTMLInputElement>('#import-file')?.addEventListener('change', importFile);
   app.querySelectorAll<HTMLElement>('[data-action]').forEach(element => element.addEventListener('click', onAction));
   app.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter as Filter; render(); focusLedger(); }));
-  app.querySelectorAll<HTMLTextAreaElement>('[data-note]').forEach(input => input.addEventListener('change', () => updateRecord(input.dataset.note!, { note: input.value })));
-  app.querySelectorAll<HTMLInputElement>('[data-url]').forEach(input => input.addEventListener('change', () => updateRecord(input.dataset.url!, { url: input.value, state: 'unchecked', statusCode: undefined, error: undefined, finalUrl: undefined, canonicalUrl: undefined })));
-  app.querySelectorAll<HTMLButtonElement>('[data-decision]').forEach(button => button.addEventListener('click', () => setDecision(button.dataset.id!, button.dataset.decision as BookmarkRecord['decision'])));
+  app.querySelectorAll<HTMLTextAreaElement>('[data-note]').forEach(input => input.addEventListener('change', () => updateRecord(input.dataset.note!, { note: input.value }, `[data-note="${input.dataset.note!}"]`)));
+  app.querySelectorAll<HTMLInputElement>('[data-url]').forEach(input => input.addEventListener('change', () => updateRecord(input.dataset.url!, { url: input.value, state: 'unchecked', statusCode: undefined, error: undefined, finalUrl: undefined, canonicalUrl: undefined }, `[data-url="${input.dataset.url!}"]`)));
+  app.querySelectorAll<HTMLButtonElement>('[data-decision]').forEach(button => button.addEventListener('click', () => setDecision(button.dataset.id!, button.dataset.decision as BookmarkRecord['decision'], `[data-decision="${button.dataset.decision!}"][data-id="${button.dataset.id!}"]`)));
 }
 
 async function onAction(event: Event) {
@@ -85,7 +87,7 @@ async function onAction(event: Event) {
   if (action === 'sample') { location.href = `${location.pathname}?demo=1`; }
   if (action === 'check') await checkVisible();
   if (action === 'export') downloadExport();
-  if (action === 'reset-demo') { records = structuredClone(sampleBookmarks); license = null; licenseMessage = ''; await chrome.storage.local.remove([DEMO_KEY, DEMO_LICENSE_KEY]); render(); announce('Demo reset.'); }
+  if (action === 'reset-demo') { records = structuredClone(sampleBookmarks); license = null; licenseMessage = ''; await chrome.storage.local.remove([DEMO_KEY, DEMO_LICENSE_KEY]); render('[data-action="reset-demo"]'); announce('Demo reset.'); }
   if (action === 'start-real') { await chrome.storage.local.remove([DEMO_KEY, DEMO_LICENSE_KEY]); location.href = location.pathname; }
   if (action === 'license') await pasteLicense();
   if (action === 'undo' && undoRecord) { const id = undoRecord.id; undoRecord = null; await updateRecord(id, { decision: 'review' }); }
@@ -97,7 +99,7 @@ async function importFile(event: Event) {
   try {
     const imported = parseBookmarkHtml(await file.text());
     if (!imported.length) throw new Error('No HTTP or HTTPS bookmarks were found.');
-    records = imported; filter = 'all'; await save(); render(); announce(`${records.length} bookmarks imported.`);
+    records = imported; filter = 'all'; await save(); render('#import-file'); announce(`${records.length} bookmarks imported.`);
   } catch (error) {
     announce(error instanceof Error ? error.message : 'The bookmark file could not be read.');
     app.insertAdjacentHTML('afterbegin', '<p class="state-callout danger" role="alert">The file could not be imported. Choose an HTML file exported by your browser.</p>');
@@ -107,7 +109,7 @@ async function importFile(event: Event) {
 async function checkVisible() {
   if (checking) return;
   if (!navigator.onLine) { announce('You are offline. Reconnect before checking links.'); return; }
-  checking = true; render();
+  checking = true; render('[data-action="check"]');
   const visible = filteredRecords().filter(record => record.state === 'unchecked' || record.state === 'failed');
   const allowance = checkAllowance(records, hasVerifiedLicense(license));
   const pending = visible.slice(0, allowance);
@@ -119,9 +121,9 @@ async function checkVisible() {
     await save();
     completed += 1;
     announce(`${completed} of ${pending.length} link checks finished.`);
-    if (completed % 10 === 0 && completed < pending.length) render();
+    if (completed % 10 === 0 && completed < pending.length) render('[data-action="check"]');
   }
-  checking = false; render(); announce(`${pending.length} link checks finished.`);
+  checking = false; render('[data-action="check"]'); announce(`${pending.length} link checks finished.`);
 }
 
 function filteredRecords(): BookmarkRecord[] {
@@ -155,14 +157,14 @@ function statusLabel(record: BookmarkRecord): string {
   return `${labels[record.state]}${record.statusCode ? ` · ${record.statusCode}` : ''}`;
 }
 
-async function setDecision(id: string, decision: BookmarkRecord['decision']) {
+async function setDecision(id: string, decision: BookmarkRecord['decision'], focusSelector: string) {
   const original = records.find(r => r.id === id);
   if (decision === 'archive' && original && original.decision !== 'archive') undoRecord = { ...original };
-  await updateRecord(id, { decision }); announce(`Bookmark marked ${decision === 'review' ? 'for later review' : decision}.`);
+  await updateRecord(id, { decision }, focusSelector); announce(`Bookmark marked ${decision === 'review' ? 'for later review' : decision}.`);
 }
 
-async function updateRecord(id: string, changes: Partial<BookmarkRecord>) {
-  records = records.map(record => record.id === id ? { ...record, ...changes } : record); await save(); render();
+async function updateRecord(id: string, changes: Partial<BookmarkRecord>, focusSelector?: string) {
+  records = records.map(record => record.id === id ? { ...record, ...changes } : record); await save(); render(focusSelector);
 }
 
 async function save() { await chrome.storage.local.set({ [demo ? DEMO_KEY : STORAGE_KEY]: records }); }
@@ -205,8 +207,9 @@ function progress() { return records.length ? Math.round(records.filter(r => r.d
 function filterLabel(value: Filter) { return ({ all: 'All bookmarks', stale: 'Older than two years', duplicates: 'Canonical duplicates', archive: 'Marked for archive', unchecked: 'Not checked', alive: 'Alive', redirected: 'Moved or changed', restricted: 'Login or restricted', dead: 'Dead pages', failed: 'Failed checks' } as Record<Filter, string>)[value]; }
 function normalizeDisplay(value: string) { try { const u = new URL(value); u.hash = ''; return u.toString(); } catch { return value; } }
 function focusLedger() { requestAnimationFrame(() => document.querySelector<HTMLElement>('#ledger-title')?.focus()); }
+function restoreFocus(selector?: string) { if (selector) requestAnimationFrame(() => app.querySelector<HTMLElement>(selector)?.focus()); }
 function announce(message: string) { announcer.textContent = message; }
 function escapeHtml(value: string) { return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-addEventListener('online', render);
-addEventListener('offline', render);
+addEventListener('online', () => render());
+addEventListener('offline', () => render());

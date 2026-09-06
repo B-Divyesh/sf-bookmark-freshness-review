@@ -195,6 +195,47 @@ test('@claim:url-repair saves a repaired URL and exports it from the packaged ex
   }
 });
 
+test('extension preserves keyboard focus after record edits, reset, and link checks', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-focus-');
+  try {
+    await page.evaluate(async () => chrome.storage.local.set({
+      'demo:archive:v1': [{ id: 'keyboard-record', title: 'Keyboard record', url: 'not-a-valid-url-before', folder: 'Focus fixture', note: '', decision: 'review', state: 'unchecked' }]
+    }));
+    await page.reload();
+
+    const archive = page.locator('.record').first().getByRole('button', { name: 'Archive' });
+    await archive.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.record').first().getByRole('button', { name: 'Archive' })).toBeFocused();
+
+    const note = page.getByLabel('Purpose or browser profile');
+    await note.focus();
+    await note.fill('Updated from a keyboard.');
+    await page.keyboard.press('Tab');
+    await expect(page.getByLabel('Purpose or browser profile')).toBeFocused();
+
+    const url = page.getByLabel('Bookmark URL');
+    await url.focus();
+    await url.fill('not-a-valid-url-after');
+    await page.keyboard.press('Tab');
+    await expect(page.getByLabel('Bookmark URL')).toBeFocused();
+
+    const check = page.getByRole('button', { name: 'Check visible links' });
+    await check.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#announcer')).toContainText('1 link checks finished.');
+    await expect(page.getByRole('button', { name: 'Check visible links' })).toBeFocused();
+
+    const reset = page.getByRole('button', { name: 'Reset demo' });
+    await reset.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: 'Reset demo' })).toBeFocused();
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
 test('@claim:decision-persistence keeps review decisions in extension storage and omits archived bookmarks from export', async () => {
   const { context, page, userDataDir } = await openExtension('bookmark-review-decisions-');
   try {
@@ -316,7 +357,9 @@ test('@claim:paid-license keeps invalid and unreachable licenses capped and remo
         ? route.abort()
         : route.fulfill({ json: { valid: mode === 'valid', reason: mode === 'valid' ? 'ok' : 'invalid', expires_at: null } }));
       await page.evaluate(async seeded => chrome.storage.local.set({ 'demo:archive:v1': seeded }), records);
-      await page.goto(`${page.url()}&license=${mode}-license`);
+      await page.reload();
+      page.once('dialog', dialog => dialog.accept(`${mode}-license`));
+      await page.getByRole('button', { name: 'Paste a license' }).click();
       if (mode === 'valid') await expect(page.getByText('Full review active')).toBeVisible();
       else await expect(page.locator('.license-message')).toContainText(mode === 'invalid' ? 'This license is not active. The 50-check limit still applies.' : 'The license could not be checked. The 50-check limit still applies.');
 
@@ -348,6 +391,83 @@ test('@claim:paid-license keeps invalid and unreachable licenses capped and remo
   await verifyBoundary('valid');
 });
 
+test('@claim:license-token-only sends only the pasted license token to Sociobot', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-license-privacy-');
+  const requests: Array<{ method: string; url: string; body: string | null; headers: Record<string, string> }> = [];
+  try {
+    await context.route('https://api.sociobot.in/**', async route => {
+      const request = route.request();
+      requests.push({ method: request.method(), url: request.url(), body: request.postData(), headers: request.headers() });
+      await route.fulfill({ json: { valid: true, reason: 'ok', expires_at: null } });
+    });
+    await page.evaluate(async () => chrome.storage.local.set({
+      'demo:archive:v1': [{ id: 'private-record', title: 'Private archive', url: 'https://private.example.test', folder: 'Private', note: 'PRIVATE ARCHIVE SENTINEL', decision: 'review', state: 'unchecked' }]
+    }));
+    await page.reload();
+    page.once('dialog', dialog => dialog.accept('privacy-test-token'));
+    await page.getByRole('button', { name: 'Paste a license' }).click();
+    await expect(page.getByText('Full review active')).toBeVisible();
+    expect(requests).toHaveLength(1);
+    const requestUrl = new URL(requests[0].url);
+    expect(requests[0].method).toBe('GET');
+    expect(requests[0].body).toBeNull();
+    expect(requestUrl.pathname).toBe('/api/v1/products/bookmark-freshness-review/verify');
+    expect([...requestUrl.searchParams.entries()]).toEqual([['license', 'privacy-test-token']]);
+    expect(JSON.stringify(requests[0])).not.toContain('PRIVATE ARCHIVE SENTINEL');
+    expect(requests[0].headers.authorization).toBeUndefined();
+    expect(requests[0].headers.cookie).toBeUndefined();
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('@claim:retry-attempt counts a failed-check retry as another free attempt', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-retry-attempt-');
+  try {
+    await page.evaluate(async () => chrome.storage.local.set({
+      'demo:archive:v1': [{ id: 'failed-retry', title: 'Retry this failed check', url: 'not-a-valid-url', folder: 'Retry fixture', note: '', decision: 'review', state: 'failed', error: 'The request failed.', checkAttempts: 1 }]
+    }));
+    await page.reload();
+    await expect(page.getByText('1 of 50 free link checks used. A one-time license removes the limit.')).toBeVisible();
+    await page.getByRole('button', { name: 'Check visible links' }).click();
+    await expect.poll(async () => page.evaluate(async () => {
+      const stored = await chrome.storage.local.get('demo:archive:v1');
+      return (stored['demo:archive:v1'] as Array<{ checkAttempts?: number }>)[0]?.checkAttempts;
+    })).toBe(2);
+    await expect(page.getByText('2 of 50 free link checks used. A one-time license removes the limit.')).toBeVisible();
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+test('@claim:older-than-two-years shows only bookmarks older than the two-year boundary', async () => {
+  const { context, page, userDataDir } = await openExtension('bookmark-review-stale-');
+  const frozenNow = Date.UTC(2026, 0, 1);
+  const twoYears = 2 * 365.25 * 24 * 60 * 60 * 1000;
+  try {
+    await page.addInitScript(now => { Date.now = () => now; }, frozenNow);
+    await page.evaluate(async ({ now, interval }) => chrome.storage.local.set({
+      'demo:archive:v1': [
+        { id: 'older', title: 'Older than two years', url: 'https://example.test/older', folder: 'Age fixture', note: '', decision: 'review', state: 'unchecked', addedAt: now - interval - 1 },
+        { id: 'boundary', title: 'Exactly two years old', url: 'https://example.test/boundary', folder: 'Age fixture', note: '', decision: 'review', state: 'unchecked', addedAt: now - interval },
+        { id: 'newer', title: 'Newer than two years', url: 'https://example.test/newer', folder: 'Age fixture', note: '', decision: 'review', state: 'unchecked', addedAt: now - interval + 1 }
+      ]
+    }), { now: frozenNow, interval: twoYears });
+    await page.reload();
+    await page.getByRole('button', { name: /Older than 2 years/ }).click();
+    await expect(page.locator('#ledger-title')).toBeFocused();
+    await expect(page.getByText('1 shown')).toBeVisible();
+    await expect(page.locator('.record').getByRole('heading', { name: 'Older than two years' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Exactly two years old' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Newer than two years' })).toHaveCount(0);
+  } finally {
+    await context.close();
+    rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
 test('@claim:html-export exports every kept bookmark without a license after the 50-check limit', async () => {
   const { context, page, userDataDir } = await openExtension('bookmark-review-free-export-');
   try {
@@ -373,7 +493,7 @@ test('@claim:html-export exports every kept bookmark without a license after the
   }
 });
 
-test('keeps review work available when the browser goes offline', async () => {
+test('@claim:offline-review keeps notes and decisions working offline, then resumes link checks after reconnecting', async () => {
   const userDataDir = mkdtempSync(resolve(tmpdir(), 'bookmark-review-offline-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
@@ -384,6 +504,10 @@ test('keeps review work available when the browser goes offline', async () => {
     const extensionId = new URL(worker.url()).host;
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/options.html?demo=1`);
+    await page.evaluate(async () => chrome.storage.local.set({
+      'demo:archive:v1': [{ id: 'offline-record', title: 'Offline recovery record', url: 'http://127.0.0.1:4173/__test-link/offline-recovery/after-reconnect', folder: 'Offline fixture', note: '', decision: 'review', state: 'unchecked' }]
+    }));
+    await page.reload();
     await context.setOffline(true);
     await expect(page.getByText('You are offline. Notes and decisions still work.')).toBeVisible();
     const note = page.getByLabel('Purpose or browser profile').first();
@@ -391,6 +515,13 @@ test('keeps review work available when the browser goes offline', async () => {
     await note.blur();
     await page.reload();
     await expect(page.getByLabel('Purpose or browser profile').first()).toHaveValue('Saved while offline.');
+    await context.setOffline(false);
+    await expect(page.getByText('You are offline. Notes and decisions still work.')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Check visible links' }).click();
+    await expect.poll(async () => page.evaluate(async () => {
+      const stored = await chrome.storage.local.get('demo:archive:v1');
+      return (stored['demo:archive:v1'] as Array<{ state: string }>)[0]?.state;
+    }), { timeout: 15_000 }).toBe('redirected');
   } finally {
     await context.close();
     rmSync(userDataDir, { recursive: true, force: true });

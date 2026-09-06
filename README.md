@@ -19,7 +19,7 @@ One-click demo: <https://bookmark-freshness-review.sociobot.in/?demo=1>
 - Stores imported archives and edits in extension local storage.
 - Exports standard HTML without a license, even after the free check limit.
 
-The free tier includes 50 link-check attempts. Retrying a failed check uses another attempt. An $18 one-time license removes that limit. New purchases are paused while checkout is unavailable. Existing licenses can still be restored.
+The free tier includes 50 link-check attempts. Retrying a failed check uses another attempt. An $18 one-time license removes that limit. New purchases are paused while checkout is unavailable. Paste an existing license in the extension’s Link-check limit section to verify it.
 
 ## Install the packaged extension
 
