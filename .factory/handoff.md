@@ -1,57 +1,51 @@
-# Repair 6 handoff — Bookmark Freshness Review
+# Verification 6 handoff — Bookmark Freshness Review
 
-Completed 2026-09-06 for work order `bookmark-freshness-review-repair-6`.
+Completed 2026-09-06 for work order `bookmark-freshness-review-verify-6`.
 
 ## Result
 
-**PASS** — the six Review 4 findings are repaired. The product remains a local-first browser extension for researchers and professionals reviewing old saved links.
+**PASS — 0 findings and 0 untested claims.**
 
-Implementation candidate deployed: `e1cdad8f3c618367b1abc2b470b707ec74cac660`.
+No product code was changed. Independent verification covered implementation `e1cdad8f3c618367b1abc2b470b707ec74cac660`, documentation baseline `3b8ecb6a8ca52aca92d3461f5a2b26f01a85f793`, and live deployment `2a41e4f7-34a1-4311-a966-3fe9a7905c22` at <https://bookmark-freshness-review.sociobot.in>.
 
-The implementation is deployed to `https://bookmark-freshness-review.sociobot.in` as static deployment `2a41e4f7-34a1-4311-a966-3fe9a7905c22`. The live JavaScript, CSS, and extension ZIP matched the final clean build.
+The full report is [`.factory/verification-6.md`](verification-6.md).
 
-## Repairs
+## Verification completed
 
-1. The site no longer treats a returned license token as a site-local activation. It removes the token from the URL and tells the buyer to paste it in the installed extension’s Link-check limit section. A fresh installed live ZIP proved that a verified pasted token removes the 50-check limit.
-2. Demo and extension actions now restore keyboard focus after decisions, note edits, URL edits, checks, and reset.
-3. The extension offline/recovery behavior is now an explicit `offline-review` claim with an installed-extension outcome test.
-4. The retry behavior is now an explicit `retry-attempt` claim with an outcome test that proves the visible and stored attempt count increases.
-5. The older-than-two-years group is now an explicit `older-than-two-years` claim with a frozen-time installed-extension boundary test.
-6. The phone demo has one real first record rather than a duplicated mobile-only control set. Its heading order is valid and the complete first record fits inside a 390 × 844 viewport.
+- Installed locked dependencies with `npm ci`: 174 packages, 0 reported vulnerabilities.
+- Ran every one of the 20 literal claim commands independently: 20 passed.
+- Ran `npm test`: claim lint, production build, 10 Vitest tests, and 42 Playwright tests passed.
+- Verified ZIP integrity and installed the live ZIP in a new persistent Chromium profile.
+- Exercised sample isolation/reset/exit, invalid and nested imports, offline edit/reload, online recovery, keyboard focus, decision/export behavior, and browser-relaunch persistence.
+- Verified fresh live phone and desktop first screens, sample output, route metadata, legal pages, links, intentional 404, security headers, reduced motion, 200% text availability, and 44 px phone targets.
+- Ran 24 live Axe route/theme/viewport combinations: zero serious or critical findings.
+- Ran `scripts/verify-url.sh` on six live entry points: all passed.
+- Verified no external request during the complete live sample flow or returned-license handling.
+- Verified live/local SHA-256 parity for the JavaScript, CSS, and extension ZIP.
+- Probed the product license endpoint: the burst was rate-limited and every 429 included `Retry-After: 4`.
+- Rechecked every earlier review and verification finding, including copy and touch-target findings: all remain fixed.
 
-Earlier review fixes remain in place: nested bookmark parsing, distinct failed-request wording and retry behavior, demo/real-data isolation, metadata and 404 structure, touch targets, privacy request limits, and real extension persistence.
+## Performance
 
-## Verification
+Fresh Lighthouse 13.0.1 scores:
 
-From a clean dependency install:
+| Profile | Performance | Accessibility | Best practices | SEO | LCP | CLS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Mobile | 100 | 100 | 100 | 100 | 1.46 s | 0.037 |
+| Desktop | 100 | 100 | 100 | 100 | 0.41 s | 0.011 |
 
-```sh
-npm ci
-npm test
-npm run build
-unzip -t dist/site/downloads/bookmark-freshness-review.zip
-```
+Build sizes: 6,730-byte gzip JavaScript, 4,649-byte gzip CSS, 39,606-byte phone hero, and 110,663-byte extension ZIP.
 
-- `npm ci` completed with 0 reported vulnerabilities.
-- `npm test` passed: claim lint for 20 unique claims, production build, 10 Vitest tests, and 42 Playwright tests.
-- Every one of the 20 literal commands listed in `.factory/claims.json` was run independently and passed.
-- Final build passed, ZIP integrity passed, and `git diff --check` passed. Site output: 6.66 kB gzip JavaScript and 4.65 kB gzip CSS; packaged extension: 110.66 kB.
-- A fresh consumer profile installed the ZIP downloaded from the live site. It completed sample mode, real HTML import, reload persistence, offline note edit/reload, and keyboard interaction.
-- Fresh desktop and 390 × 844 phone checks found the job, audience, and **Try it with sample data** action before scrolling. One click showed labeled sample data and a populated first review record. Reset changed no real-data sentinel or real license sentinel.
-- Live `verify-url.sh` passed for home, both demo URLs, Privacy, Terms, and 404. The intentional unknown-route HTTP 404 showed the designed recovery page.
-- Live link crawl returned 2xx for all HTTP links. Light/dark Axe checks on seven routes found zero serious or critical issues. Reduced-motion, 200% text, mobile touch targets, keyboard focus, no horizontal overflow, and console checks passed.
-- Live request capture found no third-party archive traffic during the demo. A 40-request invalid-license probe returned 30 HTTP 200 responses and 10 HTTP 429 responses; every 429 had `Retry-After`.
-- Current live Lighthouse: desktop and mobile each scored 100 performance, 100 accessibility, 100 best practices, and 100 SEO. Mobile FCP was 1.08 s, LCP 1.46 s, TBT 17.5 ms, and CLS 0.037. JSON evidence is in `/work/.evidence/bookmark-freshness-review-repair-6-lighthouse-*.json`.
+## Evidence
 
-## Paid offer and known gap
+- Repository report: `.factory/verification-6.md`
+- Screenshots: `.factory/verification-6-artifacts/`
+- Evidence copy: `/work/.evidence/qa-report.md`
+- Machine result: `/work/.evidence/qa-result.json`
+- Lighthouse JSON: `/work/.evidence/bookmark-freshness-review-verification-6-lighthouse-mobile.json` and `/work/.evidence/bookmark-freshness-review-verification-6-lighthouse-desktop.json`
 
-The free core, standard HTML export, and all safety behavior remain available without payment. The actual paid feature remains a one-time $18 verified extension license that removes the 50 link-check attempt limit. Public billing metadata was written to `/work/.evidence/billing-offer.json`.
+## Known external dependency
 
-Checkout remains intentionally unavailable because the external billing offer has not yet been registered. This is the named dependency for the separate billing-registration operator; no mock checkout or invented provider credentials were added. Before enabling a buy action, that operator must register the offer and configure a safe return path into the installed extension. The static site does not claim offline use; offline review is an installed-extension claim only.
+Billing offer registration remains outstanding. The product checkout endpoint returns HTTP 404, while the product correctly shows that purchases are paused and exposes no checkout link. The separate billing operator must register the one-time $18 offer before the buy action can be enabled.
 
-## Supporting files
-
-- `.factory/claims.json` — 20 public claims and executable commands.
-- `.factory/demo.md` — sandbox URL, sample, reset, exit, and storage isolation.
-- `.factory/copy-audit.md` — landing-page copy audit and terminology.
-- `.factory/catalog-description.txt` and `/work/.evidence/catalog-description.txt` — catalog copy.
+This browser-extension product has no hosted archive backend, account, tenant, or SQLite database. Backend tenant, restart, and health checks do not apply. The static site makes no offline/PWA claim; the installed extension's offline review and recovery path passed.
